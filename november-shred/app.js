@@ -112,6 +112,19 @@
     };
   }
 
+  // Descanso entre exercícios/séries: escolha global (0 = padrão do treino)
+  const REST_OPTIONS = [15, 20, 30, 40, 45, 60, 75, 90, 120];
+  function restOf(w) { return +S.settings.rest || w.rest || 30; }
+  function restSelect(w) {
+    const cur = +S.settings.rest || 0;
+    return `<label class="restsel">⏱ Descanso entre exercícios
+      <select id="restSel">
+        <option value="0" ${cur === 0 ? "selected" : ""}>Padrão do treino (${w.rest || 30}s)</option>
+        ${REST_OPTIONS.map((v) => `<option value="${v}" ${cur === v ? "selected" : ""}>${v}s</option>`).join("")}
+      </select></label>`;
+  }
+  function hhmm(ms) { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
+
   // Ajusta a meta conforme o nível (regras do PDF)
   function target(w, level) {
     const adv = level === "advanced", beg = level === "beginner", mob = w.cat === "mobility";
@@ -121,17 +134,17 @@
   }
   function formatChips(w, t) {
     const c = [];
-    if (w.type === "sets") c.push(`${t.sets} × ${t.reps}`, `Descanso ${w.rest}s`);
+    if (w.type === "sets") c.push(`${t.sets} × ${t.reps}`, `Descanso ${restOf(w)}s`);
     if (w.type === "amrap") c.push(`AMRAP ${w.amrap}`);
-    if (w.type === "interval") c.push(`${w.work}s cada × ${t.rounds} rounds`, `Descanso ${w.rest}s`);
+    if (w.type === "interval") c.push(`${w.work}s cada × ${t.rounds} rounds`, `Descanso ${restOf(w)}s`);
     c.push(`${w.min} min`);
     return c.map((x) => `<span class="chip">${esc(x)}</span>`).join("");
   }
   function description(w, t) {
     const pre = w.cat === "mobility" ? "Kettlebell leve, lento e controlado. " : "";
-    if (w.type === "sets") return `${t.sets} séries de ${t.reps} repetições de cada exercício. Descanse ${w.rest}s entre as séries e passe para o próximo.`;
+    if (w.type === "sets") return `${t.sets} séries de ${t.reps} repetições de cada exercício. Descanse ${restOf(w)}s entre as séries e passe para o próximo.`;
     if (w.type === "amrap") return `Máximo de rounds possível em ${w.amrap} minutos. Faça as repetições indicadas e descanse só quando precisar. Anote seus rounds.`;
-    return `${pre}${w.work} segundos em cada exercício, um atrás do outro. Descanse ${w.rest}s ao final de cada round. ${t.rounds} rounds.`;
+    return `${pre}${w.work} segundos em cada exercício, um atrás do outro. Descanse ${restOf(w)}s ao final de cada round. ${t.rounds} rounds.`;
   }
   function scalingKey(w) { return w.cat === "mobility" ? "mobility" : w.type; }
 
@@ -213,20 +226,6 @@
     const s = Math.ceil(ms / 1000), m = Math.floor(s / 60);
     return m > 0 ? `${m}:${String(s % 60).padStart(2, "0")}` : `${s}`;
   }
-  function paintRestPill(seg, finished) {
-    $$("[data-rest]").forEach((el) => {
-      const mine = +el.dataset.rest === T.restEx;
-      const active = mine && (T.running || finished || T.remain < seg.secs * 1000);
-      el.hidden = !active;
-      if (!active) return;
-      const pct = finished ? 100 : 100 - (T.remain / (seg.secs * 1000)) * 100;
-      el.classList.toggle("go", !!finished);
-      el.classList.toggle("paused", !T.running && !finished);
-      el.style.setProperty("--p", pct + "%");
-      el.textContent = finished ? "✓ Bora!" : `⏱ ${mmss(T.remain)}${T.running ? "" : " ⏸"}`;
-      if (finished) { clearTimeout(paintRestPill.t); paintRestPill.t = setTimeout(() => { if (!T.running) el.hidden = true; }, 4000); }
-    });
-  }
   function timerPaint(finished) {
     const box = $("#timerBox"); if (!box) return;
     const seg = T.segs[T.i] || { phase: "", secs: 0, label: "", sub: "" };
@@ -237,9 +236,49 @@
     $(".now", box).textContent = seg.label || "";
     $(".next", box).textContent = seg.sub || "";
     $(".ring > i", box).style.width = (finished ? 100 : pct) + "%";
-    if (T.mode === "rest") paintRestPill(seg, finished);
     const play = $("[data-t=play]", box);
     if (play) play.textContent = T.running ? "⏸ Pausar" : T.remain < seg.secs * 1000 && !finished ? "▶ Continuar" : "▶ Iniciar";
+  }
+
+  // ---------- Descanso ao lado do exercício ----------
+  const R = { key: null, secs: 0, endAt: 0, remain: 0, running: false, iv: null, lastSec: -1, hideT: null };
+  function restStart(key, secs) {
+    restStop();
+    Object.assign(R, { key: String(key), secs, remain: secs * 1000, endAt: Date.now() + secs * 1000, running: true, lastSec: -1 });
+    beep(660, 0.05, 0.01); keepAwake(true);
+    R.iv = setInterval(restTick, 200); restPaint();
+  }
+  function restStop() { clearInterval(R.iv); clearTimeout(R.hideT); R.running = false; R.key = null; restPaint(); if (!T.running) keepAwake(false); }
+  function restToggle() {
+    if (!R.key) return;
+    if (R.running) { R.running = false; R.remain = Math.max(0, R.endAt - Date.now()); clearInterval(R.iv); }
+    else if (R.remain > 0) { R.running = true; R.endAt = Date.now() + R.remain; R.iv = setInterval(restTick, 200); }
+    restPaint();
+  }
+  function restTick() {
+    R.remain = Math.max(0, R.endAt - Date.now());
+    const sec = Math.ceil(R.remain / 1000);
+    if (sec !== R.lastSec) { R.lastSec = sec; if (sec <= 3 && sec > 0) beep(880, 0.08); }
+    if (R.remain <= 0) {
+      clearInterval(R.iv); R.running = false; beep(1200, 0.4); buzz([200, 80, 200]);
+      restPaint(true);
+      R.hideT = setTimeout(() => { R.key = null; restPaint(); }, 4000);
+      if (!T.running) keepAwake(false);
+      return;
+    }
+    restPaint();
+  }
+  function restPaint(finished) {
+    $$("[data-rest]").forEach((el) => {
+      const active = R.key !== null && el.dataset.rest === R.key;
+      el.hidden = !active;
+      if (!active) return;
+      const done = finished || (!R.running && R.remain <= 0);
+      el.classList.toggle("go", done);
+      el.classList.toggle("paused", !R.running && !done);
+      el.style.setProperty("--p", (done ? 100 : 100 - (R.remain / (R.secs * 1000)) * 100) + "%");
+      el.textContent = done ? "✓ Bora!" : `⏱ ${mmss(R.remain)}${R.running ? "" : " ⏸"}`;
+    });
   }
 
   // ---------- Router ----------
@@ -247,7 +286,7 @@
     const h = decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "hoje";
     const cut = h.search(/[-/]/);
     const name = cut < 0 ? h : h.slice(0, cut), arg = cut < 0 ? "" : h.slice(cut + 1);
-    timerStop(true); T.restEx = -1;
+    timerStop(true); restStop();
     $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name || (name === "dia" && a.dataset.tab === "calendario") || (name === "exercicio" && a.dataset.tab === "exercicios")));
     const v = $("#view");
     if (name === "dia") { v.innerHTML = viewDay(+arg); bindDay(+arg); }
@@ -339,6 +378,18 @@
     const m = v.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/|\/v\/)([\w-]{11})/);
     return m ? m[1] : null;
   }
+  function warmupDay(log) {
+    const wd = log.warm || [];
+    const all = WARMUP.every((_, k) => wd[k]);
+    return `
+      <details class="card" ${all ? "" : "open"} id="warmCard">
+        <summary>🔥 Aquecimento (5 min) <span class="lime small" id="warmCount">${WARMUP.filter((_, k) => wd[k]).length}/${WARMUP.length}</span></summary>
+        <p class="small muted" style="margin:8px 0 0">Kettlebell leve. Toque no ✓ ao terminar cada exercício: o descanso começa ao lado. O primeiro ✓ marca o início do treino.</p>
+        ${WARMUP.map(([id, note], k) => exRow(id, k + 1, note, "",
+          `<div class="log"><button type="button" class="setbox ${wd[k] ? "on" : ""}" data-warm="${k}" aria-label="Feito">✓</button><button type="button" class="restpill" data-rest="w${k}" hidden></button></div>`)).join("")}
+      </details>`;
+  }
+
   function videoButtons(id) {
     return `<div class="vidwrap" data-vw="${id}">${videoInner(id)}</div>`;
   }
@@ -445,7 +496,7 @@
       if (w.type === "sets") {
         const done = (log.sets && log.sets[i]) || [];
         const boxes = Array.from({ length: t.sets }, (_, s) => `<button class="setbox ${done[s] ? "on" : ""}" data-set="${i}:${s}" aria-label="Série ${s + 1}">${s + 1}</button>`).join("");
-        extra = `<div class="log"><div class="sets">${boxes}</div><button type="button" class="restpill" data-rest="${i}" hidden></button>
+        extra = `<div class="log"><div class="sets">${boxes}</div><button type="button" class="restpill" data-rest="s${i}" hidden></button>
           <span>reps/série <input class="mini" type="number" inputmode="numeric" min="0" data-exreps="${i}" value="${esc(log.ex?.[i] ?? "")}" placeholder="${t.reps}"></span></div>`;
       }
       if (w.type === "interval") {
@@ -469,9 +520,10 @@
         <div class="chips">${formatChips(w, t)}</div>
         <p class="small muted" style="margin:6px 0 10px">${esc(description(w, t))}</p>
         <div class="seg" id="levelSeg">${Object.entries(LEVELS).map(([k, v]) => `<button data-level="${k}" class="${k === level ? "on" : ""}">${v}</button>`).join("")}</div>
+        ${restSelect(w)}
       </div>
 
-      ${warmupCard(false)}
+      ${warmupDay(log)}
 
       <div class="card">
         <h3>Exercícios</h3>
@@ -485,7 +537,7 @@
         </div>
       </div>
 
-      ${timerBlock(w, t, log)}
+      ${w.type === "sets" ? "" : timerBlock(w, t, log)}
 
       ${logForm(w, n, log, level)}`;
   }
@@ -498,11 +550,11 @@
         <div style="min-width:110px"><div class="rounds" id="roundCount">${log.amrapRounds || 0}</div><div class="small muted">rounds</div></div>
         <button class="btn primary" data-round="1">+1 Round</button></div>`;
     }
-    const title = w.type === "sets" ? `Timer de descanso (${w.rest}s)` : w.type === "amrap" ? `Timer AMRAP ${w.amrap} min` : `Timer intervalado`;
+    const title = w.type === "amrap" ? `Timer AMRAP ${w.amrap} min` : `Timer intervalado`;
     return `
       <div class="card">
         <div class="row" style="justify-content:space-between"><h3>⏱ ${esc(title)}</h3><button class="btn sm ghost" data-t="fs">⛶ Tela cheia</button></div>
-        ${w.type === "sets" ? `<p class="small muted" style="margin:6px 0 10px">Marque cada série concluída acima — o descanso começa automaticamente.</p>` : `<div style="height:10px"></div>`}
+        <div style="height:10px"></div>
         <div class="timer" id="timerBox">
           <div class="phase"></div>
           <div class="clock">0</div>
@@ -520,11 +572,19 @@
       </div>`;
   }
 
+  function timesHtml(w, log) {
+    const endHint = w.type === "sets" ? "na última série do último exercício" : "quando o timer terminar";
+    if (!log.startedAt) return `<span class="muted">⏱ O horário começa no primeiro ✓ do aquecimento e termina ${endHint}.</span>`;
+    const end = log.endedAt ? hhmm(log.endedAt) : "em andamento…";
+    const mins = log.endedAt ? ` · <b class="lime">${Math.max(1, Math.round((log.endedAt - log.startedAt) / 60000))} min</b>` : "";
+    return `Início <b>${hhmm(log.startedAt)}</b> · Fim <b>${end}</b>${mins} <button type="button" class="btn sm ghost" id="timesReset" style="margin-left:6px">Zerar</button>`;
+  }
   function logForm(w, n, log, level) {
     const rpe = log.rpe || 0;
     return `
       <div class="card" id="logCard">
         <h3>📝 Registro do treino</h3>
+        <div class="times" id="logTimes">${timesHtml(w, log)}</div>
         <div class="grid2" style="margin-top:10px">
           <label class="f">Kettlebell (kg)<input type="number" inputmode="decimal" step="0.5" min="0" id="fBell" value="${esc(log.bell ?? S.settings.bell)}"></label>
           <label class="f">Duração (min)<input type="number" inputmode="numeric" min="0" id="fDur" value="${esc(log.duration ?? "")}" placeholder="${w.min}"></label>
@@ -554,12 +614,12 @@
     const loadTimer = () => {
       const tt = t();
       if (w.type === "sets") {
-        timerLoad([{ phase: "rest", secs: w.rest, label: "Descanso entre séries", sub: "Marque a próxima série quando terminar" }], "rest");
+        timerLoad([], "none");
       } else if (w.type === "amrap") {
         timerLoad([
           { phase: "prep", secs: 10, label: "Pegue o kettlebell", sub: w.ex.map(([id, , r]) => `${exInfo(id).pt} x${r + tt.plus}`).join(" · ") },
           { phase: "work", secs: w.amrap * 60, label: `AMRAP ${w.amrap} min`, sub: "Toque em +1 Round a cada volta completa" },
-        ], "amrap", () => { toast("AMRAP finalizado! Registre seus rounds."); $("#logCard")?.scrollIntoView({ behavior: "smooth" }); });
+        ], "amrap", () => { markEnd(); toast("AMRAP finalizado! Registre seus rounds."); $("#logCard")?.scrollIntoView({ behavior: "smooth" }); });
       } else {
         const segs = [{ phase: "prep", secs: 10, label: "Prepare-se", sub: "Primeiro: " + exInfo(w.ex[0][0]).pt }];
         for (let r = 1; r <= tt.rounds; r++) {
@@ -567,21 +627,48 @@
             const nextId = w.ex[i + 1]?.[0];
             segs.push({ phase: "work", secs: w.work, label: exInfo(id).pt, sub: `Round ${r}/${tt.rounds} · ${i + 1}/${w.ex.length}` + (nextId ? ` · depois: ${exInfo(nextId).pt}` : r < tt.rounds ? " · depois: descanso" : " · último!") });
           });
-          if (r < tt.rounds) segs.push({ phase: "rest", secs: w.rest, label: "Descanso", sub: `Próximo: round ${r + 1} · ${exInfo(w.ex[0][0]).pt}` });
+          if (r < tt.rounds) segs.push({ phase: "rest", secs: restOf(w), label: "Descanso", sub: `Próximo: round ${r + 1} · ${exInfo(w.ex[0][0]).pt}` });
         }
-        timerLoad(segs, "interval", () => { toast("Treino concluído! Registre abaixo."); $("#logCard")?.scrollIntoView({ behavior: "smooth" }); });
+        timerLoad(segs, "interval", () => { markEnd(); toast("Treino concluído! Registre abaixo."); $("#logCard")?.scrollIntoView({ behavior: "smooth" }); });
       }
     };
     loadTimer();
 
+    // Horário de início/fim
+    const paintTimes = () => { const el = $("#logTimes"); if (el) { el.innerHTML = timesHtml(w, log()); bindTimes(); } };
+    const bindTimes = () => { const z = $("#timesReset"); if (z) z.onclick = () => { const l = log(); delete l.startedAt; delete l.endedAt; save(); paintTimes(); }; };
+    bindTimes();
+    const markStart = () => { const l = log(); if (!l.startedAt) { l.startedAt = Date.now(); delete l.endedAt; save(); paintTimes(); toast(`Treino iniciado às ${hhmm(l.startedAt)}`); } };
+    function markEnd() {
+      const l = log(); if (!l.startedAt) return;
+      l.endedAt = Date.now(); l.duration = Math.max(1, Math.round((l.endedAt - l.startedAt) / 60000)); save();
+      const f = $("#fDur"); if (f) f.value = l.duration;
+      paintTimes();
+    }
+
+    // Seletor de descanso
+    $("#restSel").onchange = (e) => { S.settings.rest = +e.target.value; save(); route(); toast(`Descanso: ${restOf(w)}s`); };
+
+    // Aquecimento
+    $$("[data-warm]").forEach((b) => (b.onclick = () => {
+      const k = +b.dataset.warm, l = log(); l.warm = l.warm || [];
+      l.warm[k] = !l.warm[k]; save();
+      b.classList.toggle("on", !!l.warm[k]);
+      $("#warmCount").textContent = `${WARMUP.filter((_, j) => l.warm[j]).length}/${WARMUP.length}`;
+      if (l.warm[k]) { markStart(); restStart("w" + k, restOf(w)); }
+      else if (R.key === "w" + k) restStop();
+    }));
+    $$("[data-rest]").forEach((p) => (p.onclick = () => { if (p.classList.contains("go")) { R.key = null; restPaint(); return; } restToggle(); }));
+
     const box = $("#timerBox");
-    $("[data-t=play]").onclick = () => (T.running ? timerPause() : timerStart());
-    $$("[data-rest]").forEach((p) => (p.onclick = () => { if (p.classList.contains("go")) { p.hidden = true; return; } T.running ? timerPause() : timerStart(); }));
-    $("[data-t=skip]").onclick = () => timerSkip();
-    $("[data-t=reset]").onclick = () => timerStop(false);
-    const exitBtn = $("[data-t=exitfs]");
-    $("[data-t=fs]").onclick = () => { box.classList.add("fs"); exitBtn.style.display = ""; };
-    exitBtn.onclick = () => { box.classList.remove("fs"); exitBtn.style.display = "none"; };
+    if (box) {
+      $("[data-t=play]").onclick = () => { if (!T.running) { markStart(); restStop(); timerStart(); } else timerPause(); };
+      $("[data-t=skip]").onclick = () => timerSkip();
+      $("[data-t=reset]").onclick = () => timerStop(false);
+      const exitBtn = $("[data-t=exitfs]");
+      $("[data-t=fs]").onclick = () => { box.classList.add("fs"); exitBtn.style.display = ""; };
+      exitBtn.onclick = () => { box.classList.remove("fs"); exitBtn.style.display = "none"; };
+    }
 
     $$("[data-round]").forEach((b) => (b.onclick = () => {
       const l = log(); l.amrapRounds = Math.max(0, (l.amrapRounds || 0) + +b.dataset.round); save();
@@ -598,10 +685,16 @@
       const l = log(); l.sets = l.sets || {}; l.sets[i] = l.sets[i] || [];
       l.sets[i][s] = !l.sets[i][s]; save();
       b.classList.toggle("on", !!l.sets[i][s]);
-      const total = t().sets * w.ex.length;
-      const doneSets = Object.values(l.sets).reduce((a, arr) => a + arr.filter(Boolean).length, 0);
-      if (l.sets[i][s] && doneSets < total) { T.restEx = i; timerStop(false); timerStart(); }
-      if (doneSets === total) toast("Todas as séries feitas! Conclua o treino abaixo.");
+      if (!l.sets[i][s]) { if (R.key === "s" + i) restStop(); return; }
+      markStart();
+      const lastOfLast = i === w.ex.length - 1 && s === t().sets - 1;
+      if (lastOfLast) {
+        restStop(); markEnd(); beep(1000, 0.6); buzz([300, 100, 300]);
+        toast(log().duration ? `Treino finalizado: ${log().duration} min 💪` : "Última série feita! 💪");
+        setTimeout(() => $("#logCard")?.scrollIntoView({ behavior: "smooth" }), 600);
+      } else {
+        restStart("s" + i, restOf(w));
+      }
     }));
 
     // Reps por exercício

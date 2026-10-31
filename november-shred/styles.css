@@ -151,6 +151,9 @@ button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
   outline: 1.5px solid #6ec1ff;
 }
 .restpill.paused { opacity: .7; }
+.restsel { display: grid; gap: 4px; margin-top: 12px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.restsel select { width: 100%; background: var(--card-2); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 16px; color: var(--text); }
+.times { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; margin-top: 8px; padding: 10px 12px; background: var(--card-2); border-radius: 10px; }
 .restpill.go { background: var(--lime); color: var(--lime-ink); outline-color: var(--lime); }
 .ex .log { grid-column: 2; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
@@ -213,7 +216,7 @@ table.t th, table.t td { text-align: left; padding: 7px 4px; border-bottom: 1px 
 table.t th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
 
 .toast {
-  position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+  position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%) translateY(-12px);
   background: var(--lime); color: var(--lime-ink); font-weight: 800; padding: 10px 16px; border-radius: 12px;
   opacity: 0; pointer-events: none; transition: .25s; z-index: 60; max-width: calc(100% - 32px);
 }
