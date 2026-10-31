@@ -213,6 +213,20 @@
     const s = Math.ceil(ms / 1000), m = Math.floor(s / 60);
     return m > 0 ? `${m}:${String(s % 60).padStart(2, "0")}` : `${s}`;
   }
+  function paintRestPill(seg, finished) {
+    $$("[data-rest]").forEach((el) => {
+      const mine = +el.dataset.rest === T.restEx;
+      const active = mine && (T.running || finished || T.remain < seg.secs * 1000);
+      el.hidden = !active;
+      if (!active) return;
+      const pct = finished ? 100 : 100 - (T.remain / (seg.secs * 1000)) * 100;
+      el.classList.toggle("go", !!finished);
+      el.classList.toggle("paused", !T.running && !finished);
+      el.style.setProperty("--p", pct + "%");
+      el.textContent = finished ? "✓ Bora!" : `⏱ ${mmss(T.remain)}${T.running ? "" : " ⏸"}`;
+      if (finished) { clearTimeout(paintRestPill.t); paintRestPill.t = setTimeout(() => { if (!T.running) el.hidden = true; }, 4000); }
+    });
+  }
   function timerPaint(finished) {
     const box = $("#timerBox"); if (!box) return;
     const seg = T.segs[T.i] || { phase: "", secs: 0, label: "", sub: "" };
@@ -223,6 +237,7 @@
     $(".now", box).textContent = seg.label || "";
     $(".next", box).textContent = seg.sub || "";
     $(".ring > i", box).style.width = (finished ? 100 : pct) + "%";
+    if (T.mode === "rest") paintRestPill(seg, finished);
     const play = $("[data-t=play]", box);
     if (play) play.textContent = T.running ? "⏸ Pausar" : T.remain < seg.secs * 1000 && !finished ? "▶ Continuar" : "▶ Iniciar";
   }
@@ -232,14 +247,14 @@
     const h = decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "hoje";
     const cut = h.search(/[-/]/);
     const name = cut < 0 ? h : h.slice(0, cut), arg = cut < 0 ? "" : h.slice(cut + 1);
-    timerStop(true);
+    timerStop(true); T.restEx = -1;
     $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name || (name === "dia" && a.dataset.tab === "calendario") || (name === "exercicio" && a.dataset.tab === "exercicios")));
     const v = $("#view");
     if (name === "dia") { v.innerHTML = viewDay(+arg); bindDay(+arg); }
     else if (name === "calendario") v.innerHTML = viewCalendar();
     else if (name === "progresso") { v.innerHTML = viewProgress(); bindProgress(); }
     else if (name === "exercicios") { v.innerHTML = viewExercises(); bindExercises(); }
-    else if (name === "exercicio") { v.innerHTML = viewExercise(arg); bindExercise(arg); }
+    else if (name === "exercicio") { const id = arg.replace(/-/g, "_"); v.innerHTML = viewExercise(id); }
     else if (name === "ajustes") { v.innerHTML = viewSettings(); bindSettings(); }
     else { v.innerHTML = viewToday(); }
     window.scrollTo(0, 0);
@@ -314,20 +329,74 @@
       </details>`;
   }
 
+  // Dentro do claude.ai a página não pode embutir sites externos (YouTube incluso):
+  // lá o vídeo salvo abre no YouTube. Hospedado em outro lugar, ele toca na própria página.
+  const CAN_EMBED = !(window.claude && typeof window.claude.use === "function");
+  function ytId(url) {
+    if (!url) return null;
+    const v = String(url).trim();
+    if (/^[\w-]{11}$/.test(v)) return v;
+    const m = v.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/|\/v\/)([\w-]{11})/);
+    return m ? m[1] : null;
+  }
   function videoButtons(id) {
-    const e = exInfo(id), pin = S.videos[id];
+    return `<div class="vidwrap" data-vw="${id}">${videoInner(id)}</div>`;
+  }
+  function videoInner(id) {
+    const e = exInfo(id), vid = ytId(S.videos[id]);
+    const mine = vid
+      ? (CAN_EMBED
+          ? `<button type="button" class="vbtn pin" data-play="${id}">▶ Assistir aqui</button>`
+          : `<a class="vbtn pin" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ Meu vídeo</a>`)
+      : "";
     return `<div class="vids">
-      ${pin ? `<a class="vbtn pin" href="${esc(pin)}" target="_blank" rel="noopener">★ Meu vídeo</a>` : ""}
-      <a class="vbtn" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">▶ Vídeo (EN)</a>
-      <a class="vbtn alt" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">▶ Vídeo (PT)</a>
-    </div>`;
+        ${mine}
+        <a class="vbtn ${vid ? "alt" : ""}" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">🔎 Buscar (EN)</a>
+        <a class="vbtn alt" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Buscar (PT)</a>
+        <button type="button" class="vbtn ghostv" data-paste="${id}">${vid ? "✎ Trocar vídeo" : "＋ Colar link do YouTube"}</button>
+      </div>
+      <div class="player" data-player hidden></div>
+      <div class="pastebox" data-pastebox hidden>
+        <input type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Cole aqui o link do YouTube" value="${esc(S.videos[id] || "")}">
+        <div class="row">
+          <button type="button" class="btn primary sm" data-pastesave="${id}">Salvar vídeo</button>
+          ${vid ? `<button type="button" class="btn ghost sm" data-pastedel="${id}">Remover</button>` : ""}
+          <button type="button" class="btn ghost sm" data-pastecancel>Cancelar</button>
+        </div>
+      </div>`;
+  }
+  function refreshVideos(id) { $$(`[data-vw="${id}"]`).forEach((el) => (el.innerHTML = videoInner(id))); }
+  function onVideoClick(ev) {
+    const b = ev.target.closest("[data-play],[data-paste],[data-pastesave],[data-pastedel],[data-pastecancel]");
+    if (!b) return;
+    const wrap = b.closest(".vidwrap"); if (!wrap) return;
+    const id = wrap.dataset.vw, box = $("[data-pastebox]", wrap), player = $("[data-player]", wrap);
+    if (b.dataset.play) {
+      if (!player.hidden) { player.hidden = true; player.innerHTML = ""; b.textContent = "▶ Assistir aqui"; return; }
+      const vid = ytId(S.videos[id]);
+      player.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&autoplay=1" title="${esc(exInfo(id).pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+      player.hidden = false; b.textContent = "✕ Fechar vídeo";
+    } else if (b.dataset.paste) {
+      box.hidden = !box.hidden; if (!box.hidden) $("input", box).focus();
+    } else if (b.dataset.pastesave) {
+      const v = $("input", box).value.trim();
+      if (!v) { toast("Cole o link do vídeo primeiro"); return; }
+      const vid = ytId(v);
+      if (!vid) { toast("Não reconheci esse link. Use um link do YouTube."); return; }
+      S.videos[id] = `https://www.youtube.com/watch?v=${vid}`; save(); refreshVideos(id);
+      toast(CAN_EMBED ? "Vídeo salvo. Toque em ▶ Assistir aqui" : "Vídeo salvo. Toque em ▶ Meu vídeo");
+    } else if (b.dataset.pastedel) {
+      delete S.videos[id]; save(); refreshVideos(id); toast("Vídeo removido");
+    } else if (b.hasAttribute("data-pastecancel")) {
+      box.hidden = true;
+    }
   }
   function exRow(id, i, note, targetTxt, extra = "") {
     const e = exInfo(id);
     return `<div class="ex">
       <div class="i">${i}</div>
       <div>
-        <a class="name" href="#exercicio-${id}" style="color:inherit;text-decoration:none">${esc(e.pt)}</a>
+        <a class="name" href="#exercicio-${id.replace(/_/g, "-")}" style="color:inherit;text-decoration:none">${esc(e.pt)}</a>
         ${targetTxt ? ` <span class="target">${esc(targetTxt)}</span>` : ""}
         <div class="orig">${esc(e.en)}${note ? " · " + esc(note) : ""}</div>
       </div>
@@ -376,7 +445,7 @@
       if (w.type === "sets") {
         const done = (log.sets && log.sets[i]) || [];
         const boxes = Array.from({ length: t.sets }, (_, s) => `<button class="setbox ${done[s] ? "on" : ""}" data-set="${i}:${s}" aria-label="Série ${s + 1}">${s + 1}</button>`).join("");
-        extra = `<div class="log"><div class="sets">${boxes}</div>
+        extra = `<div class="log"><div class="sets">${boxes}</div><button type="button" class="restpill" data-rest="${i}" hidden></button>
           <span>reps/série <input class="mini" type="number" inputmode="numeric" min="0" data-exreps="${i}" value="${esc(log.ex?.[i] ?? "")}" placeholder="${t.reps}"></span></div>`;
       }
       if (w.type === "interval") {
@@ -507,6 +576,7 @@
 
     const box = $("#timerBox");
     $("[data-t=play]").onclick = () => (T.running ? timerPause() : timerStart());
+    $$("[data-rest]").forEach((p) => (p.onclick = () => { if (p.classList.contains("go")) { p.hidden = true; return; } T.running ? timerPause() : timerStart(); }));
     $("[data-t=skip]").onclick = () => timerSkip();
     $("[data-t=reset]").onclick = () => timerStop(false);
     const exitBtn = $("[data-t=exitfs]");
@@ -530,7 +600,7 @@
       b.classList.toggle("on", !!l.sets[i][s]);
       const total = t().sets * w.ex.length;
       const doneSets = Object.values(l.sets).reduce((a, arr) => a + arr.filter(Boolean).length, 0);
-      if (l.sets[i][s] && doneSets < total) { timerStop(false); timerStart(); }
+      if (l.sets[i][s] && doneSets < total) { T.restEx = i; timerStop(false); timerStart(); }
       if (doneSets === total) toast("Todas as séries feitas! Conclua o treino abaixo.");
     }));
 
@@ -684,7 +754,7 @@
       <div class="section"><h3>Recordes por exercício</h3></div>
       <div class="card">
         ${recs.length ? `<table class="t"><tr><th>Exercício</th><th>Melhor</th><th>KB</th><th>Dia</th></tr>
-          ${recs.map((r) => `<tr><td><a href="#exercicio-${r.id}">${esc(exInfo(r.id).pt)}</a></td><td>${esc(r.best.reps)} ${r.best.type === "interval" ? "em 30s" : "reps"}</td><td>${r.best.bell != null ? esc(r.best.bell) + " kg" : "—"}</td><td>${r.best.day}</td></tr>`).join("")}</table>`
+          ${recs.map((r) => `<tr><td><a href="#exercicio-${r.id.replace(/_/g, "-")}">${esc(exInfo(r.id).pt)}</a></td><td>${esc(r.best.reps)} ${r.best.type === "interval" ? "em 30s" : "reps"}</td><td>${r.best.bell != null ? esc(r.best.bell) + " kg" : "—"}</td><td>${r.best.day}</td></tr>`).join("")}</table>`
           : `<div class="empty">Registre as reps de cada exercício nos treinos (campo "reps em 30s" ou "reps/série") para ver seus recordes aqui.</div>`}
       </div>`;
   }
@@ -727,10 +797,8 @@
       <div class="eyebrow">${esc(e.en)}</div><h1>${esc(e.pt)}</h1>
       <div class="card">
         <h3>Vídeos</h3>
+        <p class="small muted" style="margin:6px 0 0">Busque um vídeo, copie o link e cole aqui. Ele fica salvo neste exercício em todos os treinos.</p>
         <div style="margin:10px 0">${videoButtons(id)}</div>
-        <label class="f">★ Fixar meu vídeo favorito (cole o link do YouTube)
-          <input type="url" id="pinUrl" placeholder="https://youtube.com/..." value="${esc(S.videos[id] || "")}"></label>
-        <div class="row"><button class="btn primary sm" id="pinSave">Salvar link</button>${S.videos[id] ? `<button class="btn ghost sm" id="pinDel">Remover</button>` : ""}</div>
       </div>
       <div class="card">
         <h3>Aparece nos dias</h3>
@@ -743,17 +811,6 @@
           ${h.map((x) => `<tr><td><a href="#dia-${x.day}">${x.day}</a></td><td>${x.type === "sets" ? "séries" : x.type === "amrap" ? "AMRAP" : "30s"}</td><td>${x.reps ?? "—"}</td><td>${x.bell != null ? esc(x.bell) + " kg" : "—"}</td></tr>`).join("")}</table>` : `<div class="empty">Ainda sem registros para este exercício.</div>`}
       </div>`;
   }
-  function bindExercise(id) {
-    const s = $("#pinSave"); if (!s) return;
-    s.onclick = () => {
-      const v = $("#pinUrl").value.trim();
-      if (v && !/^https?:\/\//i.test(v)) { toast("Cole um link começando com https://"); return; }
-      if (v) S.videos[id] = v; else delete S.videos[id];
-      save(); toast("Vídeo salvo"); route();
-    };
-    const d = $("#pinDel"); if (d) d.onclick = () => { delete S.videos[id]; save(); route(); };
-  }
-
   // ---------- Ajustes ----------
   function viewSettings() {
     const st = S.settings;
@@ -817,6 +874,7 @@
 
   // ---------- Init ----------
   window.addEventListener("hashchange", route);
+  document.addEventListener("click", onVideoClick);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.running) keepAwake(true); });
   route();
   cloudInit();

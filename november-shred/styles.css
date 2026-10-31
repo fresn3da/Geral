@@ -14,6 +14,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); -webkit-text-size-adjust: 100%; }
 body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 a { color: var(--lime); }
@@ -127,13 +128,30 @@ h3 { font-size: 22px; }
 .ex .name { font-weight: 800; }
 .ex .orig { font-size: 12px; color: var(--muted); }
 .ex .target { color: var(--lime); font-weight: 800; }
-.ex .vids { grid-column: 2; display: flex; gap: 6px; flex-wrap: wrap; }
+.ex .vids { display: flex; gap: 6px; flex-wrap: wrap; }
 .vbtn {
   display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
   background: #ff0033; color: #fff; font-weight: 800; font-size: 12px; padding: 6px 10px; border-radius: 8px;
 }
 .vbtn.alt { background: var(--card-2); color: var(--text); }
 .vbtn.pin { background: var(--lime); color: var(--lime-ink); }
+button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
+.vbtn.ghostv { background: transparent; border: 1.5px dashed var(--line); color: var(--text); }
+.vidwrap { grid-column: 2; display: grid; gap: 8px; min-width: 0; }
+.vidwrap .vids { grid-column: auto; }
+.player { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.pastebox { display: grid; gap: 8px; background: var(--card-2); border-radius: 12px; padding: 10px; }
+.pastebox input { width: 100%; background: var(--bg); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 16px; color: var(--text); }
+.restpill {
+  --p: 0%;
+  border: 0; cursor: pointer; font-family: inherit; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums;
+  min-width: 82px; height: 38px; padding: 0 12px; border-radius: 10px; color: var(--text);
+  background: linear-gradient(90deg, color-mix(in srgb, #6ec1ff 45%, var(--card-2)) var(--p), var(--card-2) var(--p));
+  outline: 1.5px solid #6ec1ff;
+}
+.restpill.paused { opacity: .7; }
+.restpill.go { background: var(--lime); color: var(--lime-ink); outline-color: var(--lime); }
 .ex .log { grid-column: 2; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
 .scale { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; }
