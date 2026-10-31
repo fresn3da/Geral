@@ -286,7 +286,7 @@
     const h = decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "hoje";
     const cut = h.search(/[-/]/);
     const name = cut < 0 ? h : h.slice(0, cut), arg = cut < 0 ? "" : h.slice(cut + 1);
-    timerStop(true); restStop();
+    timerStop(true);
     $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name || (name === "dia" && a.dataset.tab === "calendario") || (name === "exercicio" && a.dataset.tab === "exercicios")));
     const v = $("#view");
     if (name === "dia") { v.innerHTML = viewDay(+arg); bindDay(+arg); }
@@ -295,8 +295,9 @@
     else if (name === "exercicios") { v.innerHTML = viewExercises(); bindExercises(); }
     else if (name === "exercicio") { const id = arg.replace(/-/g, "_"); v.innerHTML = viewExercise(id); }
     else if (name === "ajustes") { v.innerHTML = viewSettings(); bindSettings(); }
-    else { v.innerHTML = viewToday(); }
+    else { v.innerHTML = viewToday(); bindToday(); }
     window.scrollTo(0, 0);
+    restPaint();
     updateTop();
   }
   function updateTop() { $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos${cloud.status === "nuvem" ? " ☁︎" : ""}`; }
@@ -328,7 +329,7 @@
       ${next && next.day !== n ? `<a class="btn ghost block" href="#dia-${next.day}">Próximo pendente: Dia ${next.day} · ${esc(next.name)}</a>` : ""}
       ${statsBlock()}
       <div class="section"><h3>Antes de começar</h3></div>
-      ${warmupCard(false)}
+      ${warmupDay(log || {})}
       <div class="card small">
         <b class="lime">Guia de kettlebell</b><br>
         Iniciante: 6–12 kg · Intermediário: 12–16 kg · Avançado: 16–24 kg<br>
@@ -357,15 +358,6 @@
   }
   function totalMinutes() {
     return WORKOUTS.reduce((a, w) => a + (S.logs[w.day]?.done ? +(S.logs[w.day].duration || w.min) : 0), 0);
-  }
-
-  function warmupCard(open) {
-    return `
-      <details class="card" ${open ? "open" : ""}>
-        <summary>🔥 Aquecimento (5 min, todo dia)</summary>
-        <p class="small muted" style="margin:8px 0 0">Com kettlebell leve, antes de toda sessão.</p>
-        ${WARMUP.map(([id, note], i) => exRow(id, i + 1, note, "")).join("")}
-      </details>`;
   }
 
   // Dentro do claude.ai a página não pode embutir sites externos (YouTube incluso):
@@ -604,6 +596,27 @@
       </div>`;
   }
 
+  function startWorkoutClock(n) {
+    const l = ensureLog(n);
+    if (l.startedAt) return false;
+    l.startedAt = Date.now(); delete l.endedAt; save();
+    toast(`Treino iniciado às ${hhmm(l.startedAt)}`);
+    return true;
+  }
+  function bindWarm(n, onStart) {
+    const w = WORKOUTS[n - 1];
+    $$("[data-warm]").forEach((b) => (b.onclick = () => {
+      const k = +b.dataset.warm, l = ensureLog(n); l.warm = l.warm || [];
+      l.warm[k] = !l.warm[k]; save();
+      b.classList.toggle("on", !!l.warm[k]);
+      $("#warmCount").textContent = `${WARMUP.filter((_, j) => l.warm[j]).length}/${WARMUP.length}`;
+      if (l.warm[k]) { onStart(); restStart("w" + k, restOf(w)); }
+      else if (R.key === "w" + k) restStop();
+    }));
+    $$("[data-rest]").forEach((p) => (p.onclick = () => { if (p.classList.contains("go")) { R.key = null; restPaint(); return; } restToggle(); }));
+  }
+  function bindToday() { bindWarm(currentDay(), () => startWorkoutClock(currentDay())); }
+
   function bindDay(n) {
     const w = WORKOUTS[n - 1]; if (!w) return;
     const log = () => ensureLog(n);
@@ -638,7 +651,7 @@
     const paintTimes = () => { const el = $("#logTimes"); if (el) { el.innerHTML = timesHtml(w, log()); bindTimes(); } };
     const bindTimes = () => { const z = $("#timesReset"); if (z) z.onclick = () => { const l = log(); delete l.startedAt; delete l.endedAt; save(); paintTimes(); }; };
     bindTimes();
-    const markStart = () => { const l = log(); if (!l.startedAt) { l.startedAt = Date.now(); delete l.endedAt; save(); paintTimes(); toast(`Treino iniciado às ${hhmm(l.startedAt)}`); } };
+    const markStart = () => { if (startWorkoutClock(n)) paintTimes(); };
     function markEnd() {
       const l = log(); if (!l.startedAt) return;
       l.endedAt = Date.now(); l.duration = Math.max(1, Math.round((l.endedAt - l.startedAt) / 60000)); save();
@@ -650,15 +663,7 @@
     $("#restSel").onchange = (e) => { S.settings.rest = +e.target.value; save(); route(); toast(`Descanso: ${restOf(w)}s`); };
 
     // Aquecimento
-    $$("[data-warm]").forEach((b) => (b.onclick = () => {
-      const k = +b.dataset.warm, l = log(); l.warm = l.warm || [];
-      l.warm[k] = !l.warm[k]; save();
-      b.classList.toggle("on", !!l.warm[k]);
-      $("#warmCount").textContent = `${WARMUP.filter((_, j) => l.warm[j]).length}/${WARMUP.length}`;
-      if (l.warm[k]) { markStart(); restStart("w" + k, restOf(w)); }
-      else if (R.key === "w" + k) restStop();
-    }));
-    $$("[data-rest]").forEach((p) => (p.onclick = () => { if (p.classList.contains("go")) { R.key = null; restPaint(); return; } restToggle(); }));
+    bindWarm(n, markStart);
 
     const box = $("#timerBox");
     if (box) {
@@ -686,6 +691,7 @@
       l.sets[i][s] = !l.sets[i][s]; save();
       b.classList.toggle("on", !!l.sets[i][s]);
       if (!l.sets[i][s]) { if (R.key === "s" + i) restStop(); return; }
+      if (R.key && R.key[0] === "w") restStop();
       markStart();
       const lastOfLast = i === w.ex.length - 1 && s === t().sets - 1;
       if (lastOfLast) {
