@@ -1,0 +1,13 @@
+{
+  "name": "November Shred",
+  "short_name": "Shred",
+  "description": "Acompanhe o desafio November Shred: 30 treinos de kettlebell.",
+  "start_url": "./#/hoje",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0f14",
+  "theme_color": "#0d0f14",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
