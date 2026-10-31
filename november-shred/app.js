@@ -19,15 +19,56 @@
       if (raw && raw.settings) {
         return {
           settings: Object.assign({}, DEFAULT.settings, raw.settings),
-          logs: raw.logs || {}, body: raw.body || [], videos: raw.videos || {},
+          logs: raw.logs || {}, body: raw.body || [], videos: raw.videos || {}, updatedAt: raw.updatedAt || 0,
         };
       }
     } catch (e) { /* ignora */ }
     return JSON.parse(JSON.stringify(DEFAULT));
   }
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Não foi possível salvar"); }
+    S.updatedAt = Date.now();
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* armazenamento local indisponível */ }
+    cloudSave();
     updateTop();
+  }
+
+  // ---------- Sincronização na nuvem (quando publicado no claude.ai) ----------
+  const cloud = { doc: null, timer: null, writing: false, pending: false, status: "local" };
+  function cloudSave() {
+    if (!cloud.doc) return;
+    clearTimeout(cloud.timer);
+    cloud.timer = setTimeout(cloudFlush, 1200);
+  }
+  async function cloudFlush() {
+    if (!cloud.doc) return;
+    if (cloud.writing) { cloud.pending = true; return; }
+    cloud.writing = true;
+    try { await cloud.doc.set({ json: JSON.stringify(S), updatedAt: S.updatedAt || Date.now() }); cloud.status = "nuvem"; }
+    catch (e) { cloud.status = "erro"; }
+    cloud.writing = false;
+    if (cloud.pending) { cloud.pending = false; cloudFlush(); }
+  }
+  async function cloudInit() {
+    if (!window.claude || typeof window.claude.use !== "function") return;
+    try {
+      const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+      if (!db || !user) return;
+      const id = await user.id();
+      if (!id) return;
+      const doc = db.doc(`data/users/${id}/state/main`);
+      const snap = await doc.get();
+      cloud.doc = doc; cloud.status = "nuvem";
+      const remote = snap.exists ? snap.data() : null;
+      if (remote && remote.json && (remote.updatedAt || 0) > (S.updatedAt || 0)) {
+        const r = JSON.parse(remote.json);
+        S = { settings: Object.assign({}, DEFAULT.settings, r.settings), logs: r.logs || {}, body: r.body || [], videos: r.videos || {}, updatedAt: remote.updatedAt };
+        try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+        route();
+      } else if (S.updatedAt) {
+        cloudFlush();
+      }
+      updateTop();
+    } catch (e) { cloud.status = "local"; }
   }
 
   // ---------- Utilidades ----------
@@ -59,6 +100,16 @@
   function toast(msg) {
     const t = $("#toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  // Confirmação em dois toques (diálogos do navegador nem sempre aparecem)
+  function armConfirm(btn, question, fn) {
+    const label = btn.textContent;
+    btn.onclick = () => {
+      if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = label; fn(); return; }
+      btn.dataset.armed = "1"; btn.textContent = question;
+      setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = label; } }, 4000);
+    };
   }
 
   // Ajusta a meta conforme o nível (regras do PDF)
@@ -178,8 +229,9 @@
 
   // ---------- Router ----------
   function route() {
-    const h = location.hash.replace(/^#\/?/, "") || "hoje";
-    const [name, arg] = h.split("/");
+    const h = decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "hoje";
+    const cut = h.search(/[-/]/);
+    const name = cut < 0 ? h : h.slice(0, cut), arg = cut < 0 ? "" : h.slice(cut + 1);
     timerStop(true);
     $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name || (name === "dia" && a.dataset.tab === "calendario") || (name === "exercicio" && a.dataset.tab === "exercicios")));
     const v = $("#view");
@@ -193,7 +245,7 @@
     window.scrollTo(0, 0);
     updateTop();
   }
-  function updateTop() { $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos`; }
+  function updateTop() { $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos${cloud.status === "nuvem" ? " ☁︎" : ""}`; }
 
   // ---------- Views ----------
   function catStyle(cat) { return `--cat:${CATEGORIES[cat].color}`; }
@@ -210,7 +262,7 @@
     return `
       ${head}
       <div class="section"></div>
-      <a href="#/dia/${n}" style="text-decoration:none;color:inherit">
+      <a href="#dia-${n}" style="text-decoration:none;color:inherit">
         <div class="card accent" style="${catStyle(w.cat)}">
           <div class="row"><span class="tag" style="${catStyle(w.cat)}">${esc(CATEGORIES[w.cat].label)}</span>${log?.done ? '<span class="lime small" style="font-weight:800">✓ Concluído</span>' : ""}</div>
           <h2 style="margin-top:10px">Dia ${n} · ${esc(w.name)}</h2>
@@ -219,7 +271,7 @@
           <span class="btn primary block">${log?.done ? "Ver / editar registro" : "Começar treino →"}</span>
         </div>
       </a>
-      ${next && next.day !== n ? `<a class="btn ghost block" href="#/dia/${next.day}">Próximo pendente: Dia ${next.day} · ${esc(next.name)}</a>` : ""}
+      ${next && next.day !== n ? `<a class="btn ghost block" href="#dia-${next.day}">Próximo pendente: Dia ${next.day} · ${esc(next.name)}</a>` : ""}
       ${statsBlock()}
       <div class="section"><h3>Antes de começar</h3></div>
       ${warmupCard(false)}
@@ -275,7 +327,7 @@
     return `<div class="ex">
       <div class="i">${i}</div>
       <div>
-        <a class="name" href="#/exercicio/${id}" style="color:inherit;text-decoration:none">${esc(e.pt)}</a>
+        <a class="name" href="#exercicio-${id}" style="color:inherit;text-decoration:none">${esc(e.pt)}</a>
         ${targetTxt ? ` <span class="target">${esc(targetTxt)}</span>` : ""}
         <div class="orig">${esc(e.en)}${note ? " · " + esc(note) : ""}</div>
       </div>
@@ -291,11 +343,11 @@
     for (let i = 0; i < first; i++) cells += "<div></div>";
     WORKOUTS.forEach((w) => {
       const cls = [S.logs[w.day]?.done ? "done" : "", w.day === today ? "today" : ""].join(" ");
-      cells += `<a href="#/dia/${w.day}" class="${cls}" style="${catStyle(w.cat)}"><span class="n">${w.day}</span><span class="t">${esc(w.name)}</span></a>`;
+      cells += `<a href="#dia-${w.day}" class="${cls}" style="${catStyle(w.cat)}"><span class="n">${w.day}</span><span class="t">${esc(w.name)}</span></a>`;
     });
     const legend = Object.values(CATEGORIES).map((c) => `<span style="--c:${c.color}">${esc(c.label)}</span>`).join("");
     const list = WORKOUTS.map((w) => `
-      <a href="#/dia/${w.day}" style="${catStyle(w.cat)}">
+      <a href="#dia-${w.day}" style="${catStyle(w.cat)}">
         <span class="num">${w.day}</span>
         <span><b>${esc(w.name)}</b><br><span class="small muted">${fmtDate(dateOfDay(w.day))} · ${esc(CATEGORIES[w.cat].label)} · ${w.min} min</span></span>
         <span class="check">${S.logs[w.day]?.done ? "✓" : ""}</span>
@@ -333,8 +385,8 @@
       return exRow(id, i + 1, note, tgt, extra);
     }).join("");
 
-    const prev = n > 1 ? `<a class="btn sm ghost" href="#/dia/${n - 1}">← Dia ${n - 1}</a>` : "<span></span>";
-    const nxt = n < 30 ? `<a class="btn sm ghost" href="#/dia/${n + 1}">Dia ${n + 1} →</a>` : "<span></span>";
+    const prev = n > 1 ? `<a class="btn sm ghost" href="#dia-${n - 1}">← Dia ${n - 1}</a>` : "<span></span>";
+    const nxt = n < 30 ? `<a class="btn sm ghost" href="#dia-${n + 1}">Dia ${n + 1} →</a>` : "<span></span>";
 
     return `
       <div class="row" style="justify-content:space-between;margin-bottom:10px">${prev}${nxt}</div>
@@ -567,7 +619,7 @@
       .map((w) => ({ label: "D" + w.day, y: (S.logs[w.day].amrapRounds || 0) + (S.logs[w.day].amrapReps ? 0.1 * Math.min(9, S.logs[w.day].amrapReps) : 0) }));
     const amrapTable = WORKOUTS.filter((w) => w.type === "amrap").map((w) => {
       const l = S.logs[w.day];
-      return `<tr><td><a href="#/dia/${w.day}">Dia ${w.day}</a></td><td>${w.amrap} min</td><td>${l?.done ? `<b class="lime">${l.amrapRounds || 0}</b>${l.amrapReps ? ` + ${l.amrapReps} reps` : ""}` : "—"}</td><td>${l?.done && l.bell != null ? l.bell + " kg" : "—"}</td></tr>`;
+      return `<tr><td><a href="#dia-${w.day}">Dia ${w.day}</a></td><td>${w.amrap} min</td><td>${l?.done ? `<b class="lime">${l.amrapRounds || 0}</b>${l.amrapReps ? ` + ${l.amrapReps} reps` : ""}` : "—"}</td><td>${l?.done && l.bell != null ? l.bell + " kg" : "—"}</td></tr>`;
     }).join("");
     const bells = done.filter((w) => S.logs[w.day].bell != null).map((w) => ({ label: "D" + w.day, y: +S.logs[w.day].bell }));
     const rpes = done.filter((w) => S.logs[w.day].rpe).map((w) => ({ label: "D" + w.day, y: S.logs[w.day].rpe }));
@@ -632,7 +684,7 @@
       <div class="section"><h3>Recordes por exercício</h3></div>
       <div class="card">
         ${recs.length ? `<table class="t"><tr><th>Exercício</th><th>Melhor</th><th>KB</th><th>Dia</th></tr>
-          ${recs.map((r) => `<tr><td><a href="#/exercicio/${r.id}">${esc(exInfo(r.id).pt)}</a></td><td>${esc(r.best.reps)} ${r.best.type === "interval" ? "em 30s" : "reps"}</td><td>${r.best.bell != null ? esc(r.best.bell) + " kg" : "—"}</td><td>${r.best.day}</td></tr>`).join("")}</table>`
+          ${recs.map((r) => `<tr><td><a href="#exercicio-${r.id}">${esc(exInfo(r.id).pt)}</a></td><td>${esc(r.best.reps)} ${r.best.type === "interval" ? "em 30s" : "reps"}</td><td>${r.best.bell != null ? esc(r.best.bell) + " kg" : "—"}</td><td>${r.best.day}</td></tr>`).join("")}</table>`
           : `<div class="empty">Registre as reps de cada exercício nos treinos (campo "reps em 30s" ou "reps/série") para ver seus recordes aqui.</div>`}
       </div>`;
   }
@@ -656,7 +708,7 @@
       <p class="small muted">${ids.length} movimentos do desafio. Toque em ▶ para ver a execução no YouTube. Achou um vídeo bom? Abra o exercício e fixe o link com ★.</p>
       <input class="search" id="exSearch" type="search" placeholder="Buscar exercício (PT ou EN)…">
       <div class="card" id="exList">
-        ${ids.map((id) => `<div data-name="${esc((exInfo(id).pt + " " + exInfo(id).en).toLowerCase())}">${exRow(id, usedIn(id).length + "×", "", "", `<div class="log">Dias: ${usedIn(id).map((d) => `<a href="#/dia/${d}">${d}</a>`).join(", ") || "aquecimento"}</div>`)}</div>`).join("")}
+        ${ids.map((id) => `<div data-name="${esc((exInfo(id).pt + " " + exInfo(id).en).toLowerCase())}">${exRow(id, usedIn(id).length + "×", "", "", `<div class="log">Dias: ${usedIn(id).map((d) => `<a href="#dia-${d}">${d}</a>`).join(", ") || "aquecimento"}</div>`)}</div>`).join("")}
       </div>`;
   }
   function bindExercises() {
@@ -670,7 +722,7 @@
     const e = exInfo(id), h = exerciseHistory(id), days = usedIn(id);
     const pts = h.filter((x) => x.reps != null && x.type !== "amrap").map((x) => ({ label: "D" + x.day, y: x.reps }));
     return `
-      <a class="btn sm ghost" href="#/exercicios">← Exercícios</a>
+      <a class="btn sm ghost" href="#exercicios">← Exercícios</a>
       <div class="section"></div>
       <div class="eyebrow">${esc(e.en)}</div><h1>${esc(e.pt)}</h1>
       <div class="card">
@@ -682,13 +734,13 @@
       </div>
       <div class="card">
         <h3>Aparece nos dias</h3>
-        <div class="chips">${days.map((d) => `<a class="chip" href="#/dia/${d}" style="text-decoration:none">Dia ${d} · ${esc(WORKOUTS[d - 1].name)}</a>`).join("") || '<span class="muted small">Aquecimento</span>'}</div>
+        <div class="chips">${days.map((d) => `<a class="chip" href="#dia-${d}" style="text-decoration:none">Dia ${d} · ${esc(WORKOUTS[d - 1].name)}</a>`).join("") || '<span class="muted small">Aquecimento</span>'}</div>
       </div>
       <div class="card">
         <h3>Seu histórico</h3>
         ${chart(pts)}
         ${h.length ? `<table class="t" style="margin-top:8px"><tr><th>Dia</th><th>Formato</th><th>Reps</th><th>KB</th></tr>
-          ${h.map((x) => `<tr><td><a href="#/dia/${x.day}">${x.day}</a></td><td>${x.type === "sets" ? "séries" : x.type === "amrap" ? "AMRAP" : "30s"}</td><td>${x.reps ?? "—"}</td><td>${x.bell != null ? esc(x.bell) + " kg" : "—"}</td></tr>`).join("")}</table>` : `<div class="empty">Ainda sem registros para este exercício.</div>`}
+          ${h.map((x) => `<tr><td><a href="#dia-${x.day}">${x.day}</a></td><td>${x.type === "sets" ? "séries" : x.type === "amrap" ? "AMRAP" : "30s"}</td><td>${x.reps ?? "—"}</td><td>${x.bell != null ? esc(x.bell) + " kg" : "—"}</td></tr>`).join("")}</table>` : `<div class="empty">Ainda sem registros para este exercício.</div>`}
       </div>`;
   }
   function bindExercise(id) {
@@ -718,7 +770,7 @@
       </div>
       <div class="card">
         <h3>Backup</h3>
-        <p class="small muted">Seus dados ficam salvos só neste aparelho/navegador. Exporte de vez em quando para não perder nada.</p>
+        <p class="small muted">${cloud.status === "nuvem" ? "Seu progresso está salvo na sua conta (☁︎) e também neste aparelho." : "Seus dados ficam salvos neste aparelho/navegador."} Exporte de vez em quando para ter uma cópia. Importar um backup substitui os dados atuais.</p>
         <div class="row">
           <button class="btn primary" id="exp">⬇ Exportar</button>
           <label class="btn ghost" style="cursor:pointer">⬆ Importar<input type="file" id="imp" accept="application/json,.json" hidden></label>
@@ -739,10 +791,15 @@
     $$("#sLevel button").forEach((b) => (b.onclick = () => { S.settings.level = b.dataset.level; save(); $$("#sLevel button").forEach((x) => x.classList.toggle("on", x === b)); }));
     $("#sBell").onchange = (e) => { S.settings.bell = +e.target.value || 0; save(); };
     $("#sSound").onchange = (e) => { S.settings.sound = e.target.checked; save(); };
-    $("#exp").onclick = () => {
-      const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
+    $("#exp").onclick = async () => {
+      const json = JSON.stringify(S, null, 2), filename = `november-shred-backup-${isoDate(new Date())}.json`;
+      if (window.claude && typeof window.claude.use === "function") {
+        const dl = await window.claude.use("downloads").catch(() => null);
+        if (dl) { try { await dl.save({ filename, data: json }); toast("Backup salvo"); } catch (e) { if (e && e.code !== "declined") toast("Não foi possível salvar o arquivo aqui"); } return; }
+      }
+      const blob = new Blob([json], { type: "application/json" });
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-      a.download = `november-shred-backup-${isoDate(new Date())}.json`; a.click();
+      a.download = filename; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
     $("#imp").onchange = async (e) => {
@@ -750,21 +807,20 @@
       try {
         const data = JSON.parse(await f.text());
         if (!data.settings || !data.logs) throw new Error();
-        if (!confirm("Substituir os dados atuais pelo backup?")) return;
         S = { settings: Object.assign({}, DEFAULT.settings, data.settings), logs: data.logs, body: data.body || [], videos: data.videos || {} };
+        e.target.value = "";
         save(); toast("Backup importado"); route();
       } catch (err) { toast("Arquivo inválido"); }
     };
-    $("#reset").onclick = () => {
-      if (confirm("Apagar TODO o progresso? Isso não pode ser desfeito.")) { S = JSON.parse(JSON.stringify(DEFAULT)); save(); toast("Dados apagados"); route(); }
-    };
+    armConfirm($("#reset"), "Toque de novo para apagar tudo", () => { S = JSON.parse(JSON.stringify(DEFAULT)); save(); toast("Dados apagados"); route(); });
   }
 
   // ---------- Init ----------
   window.addEventListener("hashchange", route);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.running) keepAwake(true); });
   route();
-  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  cloudInit();
+  if (!window.claude && window.top === window && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 })();
