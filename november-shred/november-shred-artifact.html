@@ -168,6 +168,9 @@ button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
 .dl.on b { color: var(--lime); }
 .dnote, .diarytext { width: 100%; background: var(--card-2); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 16px; color: var(--text); resize: none; overflow: hidden; }
 .diarytext { min-height: 200px; overflow: auto; margin-top: 10px; }
+.sync { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.sync.ok { background: color-mix(in srgb, var(--lime) 20%, transparent); color: var(--lime); }
+.sync.bad { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
 .times { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; margin-top: 8px; padding: 10px 12px; background: var(--card-2); border-radius: 10px; }
 .restpill.go { background: var(--lime); color: var(--lime-ink); outline-color: var(--lime); }
 .ex .log { grid-column: 2; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
@@ -799,7 +802,7 @@ const SCALING = {
     updateTop();
   }
   function updateTop() {
-    const ic = cloud.status === "nuvem" ? ' <span title="Salvo na sua conta">☁︎</span>' : cloud.status === "erro" ? ' <span style="color:var(--danger)" title="Não salvou na conta">⚠︎</span>' : "";
+    const ic = cloud.status === "nuvem" ? ' <span class="sync ok">☁︎ salvo</span>' : cloud.status === "erro" ? ' <span class="sync bad">⚠︎ não salvou</span>' : "";
     $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos${ic}`;
   }
   function syncLine() {

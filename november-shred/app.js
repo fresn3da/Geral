@@ -376,7 +376,7 @@
     updateTop();
   }
   function updateTop() {
-    const ic = cloud.status === "nuvem" ? ' <span title="Salvo na sua conta">☁︎</span>' : cloud.status === "erro" ? ' <span style="color:var(--danger)" title="Não salvou na conta">⚠︎</span>' : "";
+    const ic = cloud.status === "nuvem" ? ' <span class="sync ok">☁︎ salvo</span>' : cloud.status === "erro" ? ' <span class="sync bad">⚠︎ não salvou</span>' : "";
     $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos${ic}`;
   }
   function syncLine() {
