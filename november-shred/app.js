@@ -121,7 +121,8 @@
       <select id="restSel">
         <option value="0" ${cur === 0 ? "selected" : ""}>Padrão do treino (${w.rest || 30}s)</option>
         ${REST_OPTIONS.map((v) => `<option value="${v}" ${cur === v ? "selected" : ""}>${v}s</option>`).join("")}
-      </select></label>`;
+      </select></label>
+      <button type="button" class="btn sm ghost" id="restTest" style="margin-top:8px">🔊 Testar alarme do descanso</button>`;
   }
   function hhmm(ms) { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
 
@@ -149,17 +150,58 @@
   function scalingKey(w) { return w.cat === "mobility" ? "mobility" : w.type; }
 
   // ---------- Áudio / tela ----------
-  let actx = null;
-  function beep(freq = 880, dur = 0.12, vol = 0.25) {
+  let actx = null, alarmEl = null, audioReady = false;
+  function ctx() {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  function beep(freq = 880, dur = 0.12, vol = 0.25, at = 0) {
     if (!S.settings.sound) return;
     try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = actx.createOscillator(), g = actx.createGain();
+      const c = ctx(), t0 = c.currentTime + at;
+      const o = c.createOscillator(), g = c.createGain();
       o.frequency.value = freq; o.type = "square";
-      g.gain.setValueAtTime(vol, actx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
-      o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + dur);
     } catch (e) { /* sem áudio */ }
+  }
+  // Alarme em arquivo de áudio: no iPhone toca mesmo com o botão de silencioso ligado
+  function alarmWav() {
+    const rate = 22050, beeps = [[0, 0.22], [0.3, 0.22], [0.6, 0.45]], len = Math.ceil(rate * 1.1);
+    const buf = new ArrayBuffer(44 + len * 2), v = new DataView(buf);
+    const str = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+    str(0, "RIFF"); v.setUint32(4, 36 + len * 2, true); str(8, "WAVEfmt "); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, len * 2, true);
+    for (let i = 0; i < len; i++) {
+      const t = i / rate; let a = 0;
+      for (const [st, d] of beeps) if (t >= st && t < st + d) { const k = t - st; a = Math.min(1, k / 0.01, (d - k) / 0.02) * 0.85; }
+      v.setInt16(44 + i * 2, Math.round(a * Math.sign(Math.sin(2 * Math.PI * 1320 * t)) * 0.6 * 32767), true);
+    }
+    let bin = ""; const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return "data:audio/wav;base64," + btoa(bin);
+  }
+  function unlockAudio() {
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    try { ctx(); } catch (e) {}
+    if (audioReady) return;
+    try {
+      alarmEl = alarmEl || Object.assign(new Audio(alarmWav()), { preload: "auto" });
+      alarmEl.muted = true;
+      const pr = alarmEl.play();
+      if (pr) pr.then(() => { alarmEl.pause(); alarmEl.currentTime = 0; alarmEl.muted = false; audioReady = true; }).catch(() => { alarmEl.muted = false; });
+    } catch (e) {}
+  }
+  function alarm() {
+    buzz([400, 150, 400, 150, 600]);
+    if (!S.settings.sound) return;
+    const web = () => { beep(1320, 0.2, 0.6, 0); beep(1320, 0.2, 0.6, 0.3); beep(1320, 0.45, 0.6, 0.6); };
+    if (alarmEl && audioReady) {
+      try { alarmEl.currentTime = 0; const pr = alarmEl.play(); if (pr) pr.catch(web); } catch (e) { web(); }
+    } else web();
   }
   function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
   let wakeLock = null;
@@ -175,7 +217,7 @@
   const T = { segs: [], i: 0, endAt: 0, remain: 0, running: false, iv: null, onDone: null, lastSec: -1, mode: "" };
   function timerLoad(segs, mode, onDone) {
     timerStop(true);
-    Object.assign(T, { segs, i: 0, remain: segs[0] ? segs[0].secs * 1000 : 0, running: false, onDone, lastSec: -1, mode });
+    Object.assign(T, { segs, i: 0, remain: segs[0] ? segs[0].secs * 1000 : 0, running: false, onDone, onRound: null, lastSec: -1, mode });
     timerPaint();
   }
   function timerStart() {
@@ -193,8 +235,10 @@
     clearInterval(T.iv); T.running = false; keepAwake(false);
     if (!silent) { T.i = 0; T.remain = T.segs[0] ? T.segs[0].secs * 1000 : 0; timerPaint(); }
   }
+  function segDone(seg) { if (seg && seg.endsRound && T.onRound) T.onRound(seg.endsRound); }
   function timerSkip() {
     if (T.i >= T.segs.length - 1) { finishTimer(); return; }
+    segDone(T.segs[T.i]);
     T.i++; T.remain = T.segs[T.i].secs * 1000; T.endAt = Date.now() + T.remain; T.lastSec = -1;
     phaseCue(); timerPaint();
   }
@@ -211,12 +255,13 @@
       if (sec <= 3 && sec > 0) beep(880, 0.08);
     }
     if (T.remain <= 0) {
-      if (T.i < T.segs.length - 1) { T.i++; T.remain = T.segs[T.i].secs * 1000; T.endAt = Date.now() + T.remain; T.lastSec = -1; phaseCue(); }
+      if (T.i < T.segs.length - 1) { segDone(T.segs[T.i]); T.i++; T.remain = T.segs[T.i].secs * 1000; T.endAt = Date.now() + T.remain; T.lastSec = -1; phaseCue(); }
       else { finishTimer(); return; }
     }
     timerPaint();
   }
   function finishTimer() {
+    segDone(T.segs[T.i]);
     clearInterval(T.iv); T.running = false; keepAwake(false);
     beep(1000, 0.6); buzz([300, 100, 300]);
     T.remain = 0; T.i = T.segs.length - 1; timerPaint(true);
@@ -260,7 +305,7 @@
     const sec = Math.ceil(R.remain / 1000);
     if (sec !== R.lastSec) { R.lastSec = sec; if (sec <= 3 && sec > 0) beep(880, 0.08); }
     if (R.remain <= 0) {
-      clearInterval(R.iv); R.running = false; beep(1200, 0.4); buzz([200, 80, 200]);
+      clearInterval(R.iv); R.running = false; alarm(); toast("⏰ Descanso acabou! Bora!");
       restPaint(true);
       R.hideT = setTimeout(() => { R.key = null; restPaint(); }, 4000);
       if (!T.running) keepAwake(false);
@@ -531,7 +576,88 @@
 
       ${w.type === "sets" ? "" : timerBlock(w, t, log)}
 
+      <div class="card" id="diaryCard">
+        <div class="row" style="justify-content:space-between">
+          <h3>📓 Diário de bordo</h3>
+          <button type="button" class="btn sm ghost" id="diaryCopy">Copiar texto</button>
+        </div>
+        <p class="small muted" style="margin:6px 0 0">Vai sendo preenchido sozinho com o horário de cada ✓, série e round. Escreva suas observações no campo de cada exercício.</p>
+        <div id="diary">${diaryHtml(n)}</div>
+        <textarea id="diaryText" class="diarytext" readonly hidden></textarea>
+      </div>
+
       ${logForm(w, n, log, level)}`;
+  }
+
+  // ---------- Diário de bordo ----------
+  function diaryEntries(n) {
+    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    const out = [];
+    WARMUP.forEach(([id, note], k) => {
+      const at = l.warmAt?.[k];
+      out.push({ key: "w" + k, title: `Aquecimento ${k + 1} - ${exInfo(id).pt}`, id, note,
+        lines: [{ label: "Feito", at, done: !!l.warm?.[k] }] });
+    });
+    w.ex.forEach(([id, note, reps], i) => {
+      const lines = [];
+      if (w.type === "sets") {
+        for (let s = 0; s < t.sets; s++) lines.push({ label: `Série ${s + 1}`, at: l.setAt?.[i]?.[s], done: !!l.sets?.[i]?.[s] });
+      }
+      const extra = w.type === "amrap" ? `x${reps + t.plus}` : l.ex?.[i] != null ? (w.type === "sets" ? `${l.ex[i]} reps/série` : `${l.ex[i]} reps em ${w.work}s`) : "";
+      out.push({ key: "e" + i, title: `Exercício ${i + 1} - ${exInfo(id).pt}`, id, note: [note, extra].filter(Boolean).join(" · "), lines });
+    });
+    const rounds = [];
+    if (w.type === "amrap") (l.roundAt || []).forEach((at, r) => rounds.push({ label: `Round ${r + 1}`, at, done: true }));
+    if (w.type === "interval") for (let r = 0; r < t.rounds; r++) rounds.push({ label: `Round ${r + 1}`, at: l.roundAt?.[r], done: !!l.roundAt?.[r] });
+    return { out, rounds, l };
+  }
+  function diaryHtml(n) {
+    const { out, rounds, l } = diaryEntries(n);
+    const lineHtml = (x) => `<div class="dl ${x.done ? "on" : ""}"><span>${esc(x.label)}</span><span>›</span><b>${x.at ? hhmm(x.at) : x.done ? "feito (sem horário)" : "—"}</b></div>`;
+    const head = l.startedAt ? `<div class="dhead">Início <b>${hhmm(l.startedAt)}</b>${l.endedAt ? ` · Fim <b>${hhmm(l.endedAt)}</b> · ${Math.max(1, Math.round((l.endedAt - l.startedAt) / 60000))} min` : ""}</div>` : "";
+    const items = out.map((e) => {
+      const url = S.videos[e.id];
+      return `<div class="ditem">
+        <div class="dtitle">${esc(e.title)}${e.note ? ` <span class="muted small">(${esc(e.note)})</span>` : ""}</div>
+        <div class="small">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>` : `<span class="muted">Sem vídeo salvo</span>`}</div>
+        <textarea class="dnote" data-dnote="${e.key}" rows="1" placeholder="Observações (carga, sensação, ajuste…)">${esc(l.dnotes?.[e.key] || "")}</textarea>
+        ${e.lines.map(lineHtml).join("")}
+      </div>`;
+    }).join("");
+    const rnd = rounds.length ? `<div class="ditem"><div class="dtitle">Rounds</div>${rounds.map(lineHtml).join("")}</div>` : "";
+    return head + items + rnd;
+  }
+  function diaryText(n) {
+    const w = WORKOUTS[n - 1], { out, rounds, l } = diaryEntries(n);
+    const ln = (x) => `${x.label} > ${x.at ? hhmm(x.at) : x.done ? "(sem horário)" : "—"}`;
+    const parts = [`DIA ${n} - ${w.name} (${fmtDate(dateOfDay(n))})`];
+    if (l.startedAt) parts.push(`Início ${hhmm(l.startedAt)}${l.endedAt ? ` · Fim ${hhmm(l.endedAt)}` : ""}`);
+    out.forEach((e) => parts.push([e.title + (e.note ? ` (${e.note})` : ""), S.videos[e.id] || "Sem vídeo", l.dnotes?.[e.key] || "", ...e.lines.map(ln)].filter((x) => x !== "").join("\n")));
+    if (rounds.length) parts.push(["Rounds", ...rounds.map(ln)].join("\n"));
+    return parts.join("\n\n");
+  }
+  function renderDiary(n) {
+    const el = $("#diary"); if (!el) return;
+    el.innerHTML = diaryHtml(n); bindDiary(n);
+  }
+  function bindDiary(n) {
+    $$("[data-dnote]").forEach((ta) => {
+      const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+      fit();
+      ta.oninput = () => {
+        fit();
+        const l = ensureLog(n); l.dnotes = l.dnotes || {};
+        if (ta.value.trim()) l.dnotes[ta.dataset.dnote] = ta.value; else delete l.dnotes[ta.dataset.dnote];
+        clearTimeout(bindDiary.t); bindDiary.t = setTimeout(save, 600);
+      };
+      ta.onblur = () => { clearTimeout(bindDiary.t); save(); };
+    });
+    const c = $("#diaryCopy");
+    if (c) c.onclick = async () => {
+      const txt = diaryText(n);
+      try { await navigator.clipboard.writeText(txt); toast("Diário copiado"); }
+      catch (e) { const ta = $("#diaryText"); ta.value = txt; ta.hidden = false; ta.focus(); ta.select(); toast("Selecione e copie o texto abaixo"); }
+    };
   }
 
   function timerBlock(w, t, log) {
@@ -607,7 +733,10 @@
     const w = WORKOUTS[n - 1];
     $$("[data-warm]").forEach((b) => (b.onclick = () => {
       const k = +b.dataset.warm, l = ensureLog(n); l.warm = l.warm || [];
-      l.warm[k] = !l.warm[k]; save();
+      l.warm[k] = !l.warm[k];
+      l.warmAt = l.warmAt || {};
+      if (l.warm[k]) l.warmAt[k] = Date.now(); else delete l.warmAt[k];
+      save(); renderDiary(n);
       b.classList.toggle("on", !!l.warm[k]);
       $("#warmCount").textContent = `${WARMUP.filter((_, j) => l.warm[j]).length}/${WARMUP.length}`;
       if (l.warm[k]) { onStart(); restStart("w" + k, restOf(w)); }
@@ -638,7 +767,7 @@
         for (let r = 1; r <= tt.rounds; r++) {
           w.ex.forEach(([id], i) => {
             const nextId = w.ex[i + 1]?.[0];
-            segs.push({ phase: "work", secs: w.work, label: exInfo(id).pt, sub: `Round ${r}/${tt.rounds} · ${i + 1}/${w.ex.length}` + (nextId ? ` · depois: ${exInfo(nextId).pt}` : r < tt.rounds ? " · depois: descanso" : " · último!") });
+            segs.push({ endsRound: i === w.ex.length - 1 ? r : 0, phase: "work", secs: w.work, label: exInfo(id).pt, sub: `Round ${r}/${tt.rounds} · ${i + 1}/${w.ex.length}` + (nextId ? ` · depois: ${exInfo(nextId).pt}` : r < tt.rounds ? " · depois: descanso" : " · último!") });
           });
           if (r < tt.rounds) segs.push({ phase: "rest", secs: restOf(w), label: "Descanso", sub: `Próximo: round ${r + 1} · ${exInfo(w.ex[0][0]).pt}` });
         }
@@ -646,24 +775,27 @@
       }
     };
     loadTimer();
+    if (w.type === "interval") T.onRound = (r) => { const l = log(); l.roundAt = l.roundAt || []; l.roundAt[r - 1] = Date.now(); save(); renderDiary(n); };
 
     // Horário de início/fim
     const paintTimes = () => { const el = $("#logTimes"); if (el) { el.innerHTML = timesHtml(w, log()); bindTimes(); } };
-    const bindTimes = () => { const z = $("#timesReset"); if (z) z.onclick = () => { const l = log(); delete l.startedAt; delete l.endedAt; save(); paintTimes(); }; };
+    const bindTimes = () => { const z = $("#timesReset"); if (z) z.onclick = () => { const l = log(); delete l.startedAt; delete l.endedAt; save(); paintTimes(); renderDiary(n); }; };
     bindTimes();
-    const markStart = () => { if (startWorkoutClock(n)) paintTimes(); };
+    const markStart = () => { if (startWorkoutClock(n)) { paintTimes(); renderDiary(n); } };
     function markEnd() {
       const l = log(); if (!l.startedAt) return;
       l.endedAt = Date.now(); l.duration = Math.max(1, Math.round((l.endedAt - l.startedAt) / 60000)); save();
       const f = $("#fDur"); if (f) f.value = l.duration;
-      paintTimes();
+      paintTimes(); renderDiary(n);
     }
 
     // Seletor de descanso
+    $("#restTest").onclick = () => { unlockAudio(); setTimeout(alarm, 150); };
     $("#restSel").onchange = (e) => { S.settings.rest = +e.target.value; save(); route(); toast(`Descanso: ${restOf(w)}s`); };
 
     // Aquecimento
     bindWarm(n, markStart);
+    bindDiary(n);
 
     const box = $("#timerBox");
     if (box) {
@@ -676,7 +808,11 @@
     }
 
     $$("[data-round]").forEach((b) => (b.onclick = () => {
-      const l = log(); l.amrapRounds = Math.max(0, (l.amrapRounds || 0) + +b.dataset.round); save();
+      const l = log(), d = +b.dataset.round;
+      l.amrapRounds = Math.max(0, (l.amrapRounds || 0) + d);
+      l.roundAt = l.roundAt || [];
+      if (d > 0) l.roundAt.push(Date.now()); else l.roundAt.splice(l.amrapRounds);
+      save(); renderDiary(n);
       $("#roundCount").textContent = l.amrapRounds; const f = $("#fRounds"); if (f) f.value = l.amrapRounds;
       if (+b.dataset.round > 0) { beep(1300, 0.08); buzz(60); }
     }));
@@ -688,7 +824,10 @@
     $$("[data-set]").forEach((b) => (b.onclick = () => {
       const [i, s] = b.dataset.set.split(":").map(Number);
       const l = log(); l.sets = l.sets || {}; l.sets[i] = l.sets[i] || [];
-      l.sets[i][s] = !l.sets[i][s]; save();
+      l.sets[i][s] = !l.sets[i][s];
+      l.setAt = l.setAt || {}; l.setAt[i] = l.setAt[i] || {};
+      if (l.sets[i][s]) l.setAt[i][s] = Date.now(); else delete l.setAt[i][s];
+      save(); renderDiary(n);
       b.classList.toggle("on", !!l.sets[i][s]);
       if (!l.sets[i][s]) { if (R.key === "s" + i) restStop(); return; }
       if (R.key && R.key[0] === "w") restStop();
@@ -922,7 +1061,8 @@
         <div class="seg" id="sLevel">${Object.entries(LEVELS).map(([k, v]) => `<button data-level="${k}" class="${k === st.level ? "on" : ""}">${v}</button>`).join("")}</div>
         <div style="height:12px"></div>
         <label class="f">Kettlebell padrão (kg)<input type="number" inputmode="decimal" step="0.5" min="0" id="sBell" value="${esc(st.bell)}"></label>
-        <label class="f" style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="sSound" ${st.sound ? "checked" : ""} style="width:22px;height:22px;margin:0"> Bipes do timer</label>
+        <div class="row"><label class="f grow" style="display:flex;align-items:center;gap:10px;margin:0"><input type="checkbox" id="sSound" ${st.sound ? "checked" : ""} style="width:22px;height:22px;margin:0"> Sons do timer</label><button type="button" class="btn sm" id="sTest">🔊 Testar alarme</button></div>
+        <p class="small muted">No iPhone, deixe o volume de mídia alto. O alarme do fim do descanso também vibra (Android).</p>
       </div>
       <div class="card">
         <h3>Backup</h3>
@@ -947,6 +1087,7 @@
     $$("#sLevel button").forEach((b) => (b.onclick = () => { S.settings.level = b.dataset.level; save(); $$("#sLevel button").forEach((x) => x.classList.toggle("on", x === b)); }));
     $("#sBell").onchange = (e) => { S.settings.bell = +e.target.value || 0; save(); };
     $("#sSound").onchange = (e) => { S.settings.sound = e.target.checked; save(); };
+    $("#sTest").onclick = () => { unlockAudio(); setTimeout(alarm, 150); };
     $("#exp").onclick = async () => {
       const json = JSON.stringify(S, null, 2), filename = `november-shred-backup-${isoDate(new Date())}.json`;
       if (window.claude && typeof window.claude.use === "function") {
@@ -973,6 +1114,7 @@
 
   // ---------- Init ----------
   window.addEventListener("hashchange", route);
+  document.addEventListener("pointerdown", unlockAudio, true);
   document.addEventListener("click", onVideoClick);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.running) keepAwake(true); });
   route();
