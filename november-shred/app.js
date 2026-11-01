@@ -33,42 +33,72 @@
   }
 
   // ---------- Sincronização na nuvem (quando publicado no claude.ai) ----------
-  const cloud = { doc: null, timer: null, writing: false, pending: false, status: "local" };
+  // Documento por pessoa: data/users/<id>/state (privado). Nunca substitui às cegas:
+  // dados locais e da conta são sempre JUNTADOS, para que uma tela vazia não apague nada.
+  const cloud = { doc: null, timer: null, writing: false, pending: false, status: "local", savedAt: 0, error: "" };
   function cloudSave() {
     if (!cloud.doc) return;
     clearTimeout(cloud.timer);
-    cloud.timer = setTimeout(cloudFlush, 1200);
+    cloud.timer = setTimeout(cloudFlush, 1000);
   }
   async function cloudFlush() {
     if (!cloud.doc) return;
     if (cloud.writing) { cloud.pending = true; return; }
     cloud.writing = true;
-    try { await cloud.doc.set({ json: JSON.stringify(S), updatedAt: S.updatedAt || Date.now() }); cloud.status = "nuvem"; }
-    catch (e) { cloud.status = "erro"; }
-    cloud.writing = false;
+    try {
+      await cloud.doc.set({ json: JSON.stringify(S), updatedAt: S.updatedAt || Date.now() });
+      cloud.status = "nuvem"; cloud.savedAt = Date.now(); cloud.error = "";
+    } catch (e) { cloud.status = "erro"; cloud.error = (e && (e.code || e.message)) || "erro"; }
+    cloud.writing = false; updateTop();
     if (cloud.pending) { cloud.pending = false; cloudFlush(); }
+  }
+  function logWeight(l) {
+    if (!l) return -1;
+    let w = l.done ? 1000 : 0;
+    for (const arr of Object.values(l.sets || {})) w += (arr || []).filter(Boolean).length;
+    w += (l.warm || []).filter(Boolean).length + (l.amrapRounds || 0) + Object.keys(l.ex || {}).length + Object.keys(l.dnotes || {}).length;
+    if (l.startedAt) w += 1; if (l.notes) w += 1; if (l.rpe) w += 1;
+    return w;
+  }
+  function mergeStates(a, b) {
+    // b = o mais recente; em empate de conteúdo, vence o mais recente
+    const newer = (b.updatedAt || 0) >= (a.updatedAt || 0) ? b : a, older = newer === b ? a : b;
+    const logs = {};
+    new Set([...Object.keys(older.logs || {}), ...Object.keys(newer.logs || {})]).forEach((d) => {
+      const x = older.logs?.[d], y = newer.logs?.[d];
+      logs[d] = !x ? y : !y ? x : logWeight(x) > logWeight(y) ? x : y;
+    });
+    const body = {};
+    [...(older.body || []), ...(newer.body || [])].forEach((m) => { if (m && m.date) body[m.date] = m; });
+    return {
+      settings: Object.assign({}, DEFAULT.settings, older.settings, newer.settings),
+      logs, body: Object.values(body),
+      videos: Object.assign({}, older.videos, newer.videos),
+      updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0),
+    };
   }
   async function cloudInit() {
     if (!window.claude || typeof window.claude.use !== "function") return;
     try {
       const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
-      if (!db || !user) return;
+      if (!db || !user) { cloud.status = "sem-conta"; updateTop(); return; }
       const id = await user.id();
-      if (!id) return;
-      const doc = db.doc(`data/users/${id}/state/main`);
+      if (!id) { cloud.status = "sem-conta"; updateTop(); return; }
+      const doc = db.doc(`data/users/${id}/state`);
       const snap = await doc.get();
-      cloud.doc = doc; cloud.status = "nuvem";
+      cloud.doc = doc;
       const remote = snap.exists ? snap.data() : null;
-      if (remote && remote.json && (remote.updatedAt || 0) > (S.updatedAt || 0)) {
-        const r = JSON.parse(remote.json);
-        S = { settings: Object.assign({}, DEFAULT.settings, r.settings), logs: r.logs || {}, body: r.body || [], videos: r.videos || {}, updatedAt: remote.updatedAt };
+      if (remote && remote.json) {
+        const r = JSON.parse(remote.json); r.updatedAt = remote.updatedAt || r.updatedAt || 0;
+        const merged = mergeStates(r, S);
+        const changedLocal = JSON.stringify(merged) !== JSON.stringify(S);
+        S = merged;
         try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-        route();
-      } else if (S.updatedAt) {
-        cloudFlush();
+        if (changedLocal) route();
       }
-      updateTop();
-    } catch (e) { cloud.status = "local"; }
+      await cloudFlush();
+    } catch (e) { cloud.status = "erro"; cloud.error = (e && (e.code || e.message)) || "erro"; }
+    updateTop();
   }
 
   // ---------- Utilidades ----------
@@ -345,7 +375,16 @@
     restPaint();
     updateTop();
   }
-  function updateTop() { $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos${cloud.status === "nuvem" ? " ☁︎" : ""}`; }
+  function updateTop() {
+    const ic = cloud.status === "nuvem" ? ' <span title="Salvo na sua conta">☁︎</span>' : cloud.status === "erro" ? ' <span style="color:var(--danger)" title="Não salvou na conta">⚠︎</span>' : "";
+    $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos${ic}`;
+  }
+  function syncLine() {
+    if (cloud.status === "nuvem") return `<b class="lime">☁︎ Salvo na sua conta</b>${cloud.savedAt ? ` às ${hhmm(cloud.savedAt)}` : ""}. Também fica uma cópia neste aparelho.`;
+    if (cloud.status === "erro") return `<b style="color:var(--danger)">⚠︎ Não consegui salvar na sua conta</b> (${esc(cloud.error)}). Seus dados estão só neste aparelho: exporte um backup.`;
+    if (cloud.status === "sem-conta") return `<b style="color:var(--danger)">⚠︎ Sem conta conectada.</b> Seus dados estão só neste aparelho: exporte um backup.`;
+    return `Seus dados ficam salvos neste aparelho/navegador. Exporte um backup de vez em quando.`;
+  }
 
   // ---------- Views ----------
   function catStyle(cat) { return `--cat:${CATEGORIES[cat].color}`; }
@@ -1066,7 +1105,8 @@
       </div>
       <div class="card">
         <h3>Backup</h3>
-        <p class="small muted">${cloud.status === "nuvem" ? "Seu progresso está salvo na sua conta (☁︎) e também neste aparelho." : "Seus dados ficam salvos neste aparelho/navegador."} Exporte de vez em quando para ter uma cópia. Importar um backup substitui os dados atuais.</p>
+        <p class="small">${syncLine()}</p>
+        <p class="small muted">Importar um backup junta os dados dele com os atuais (não apaga nada).</p>
         <div class="row">
           <button class="btn primary" id="exp">⬇ Exportar</button>
           <label class="btn ghost" style="cursor:pointer">⬆ Importar<input type="file" id="imp" accept="application/json,.json" hidden></label>
@@ -1104,7 +1144,7 @@
       try {
         const data = JSON.parse(await f.text());
         if (!data.settings || !data.logs) throw new Error();
-        S = { settings: Object.assign({}, DEFAULT.settings, data.settings), logs: data.logs, body: data.body || [], videos: data.videos || {} };
+        S = mergeStates({ settings: data.settings, logs: data.logs, body: data.body || [], videos: data.videos || {}, updatedAt: data.updatedAt || 0 }, S);
         e.target.value = "";
         save(); toast("Backup importado"); route();
       } catch (err) { toast("Arquivo inválido"); }
