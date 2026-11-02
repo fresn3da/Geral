@@ -115,6 +115,15 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
 .jar.flash .pot{animation:flash .9s ease 2}
 @keyframes flash{50%{transform:scale(1.15) rotate(-6deg)}}
 .empty-shelf{margin:auto 0;color:var(--ink-soft);font-weight:700;font-size:13px;line-height:1.3;align-self:center}
+.album{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;padding:2px 0 4px}
+.secret{aspect-ratio:1;max-width:100%;border-radius:50%;padding:0;position:relative;
+  border:2px dashed var(--ink-soft);background:var(--c);opacity:.28;transition:opacity .3s,transform .2s}
+.secret.got{opacity:1;border:2px solid rgba(29,39,66,.15);
+  background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.6),rgba(255,255,255,0) 35%),var(--c)}
+.secret.new{animation:pop .9s ease 2}
+.secret:active{transform:scale(.9)}
+.count{font-variant-numeric:tabular-nums;color:var(--ink)}
+@keyframes pop{40%{transform:scale(1.35) rotate(-8deg)}70%{transform:scale(.95)}}
 .confirm{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-weight:800;font-size:14px}
 .confirm .btn{font-size:14px;padding:6px 10px}
 .drop{position:fixed;left:0;top:0;width:30px;height:30px;border-radius:50% 50% 50% 0;pointer-events:none;z-index:50;border:2px solid rgba(29,39,66,.18)}
@@ -184,6 +193,8 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
   </div>
 
   <section class="shelf" aria-label="Tintas">
+    <h2>Cores secretas <span class="count" id="albumCount">0/12</span></h2>
+    <div class="album" id="album"></div>
     <h2>Tintas</h2>
     <div class="jars" id="base"></div>
     <h2>Minhas cores novas <button class="tool" id="editBtn" type="button" hidden>Arrumar</button></h2>
@@ -239,9 +250,13 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
     const T=sum(p); if(T<=0) return null;
     const c=p.r+p.y+p.b;
     let col;
-    if(c>0){const m=Math.max(p.r,p.y,p.b); col=ryb2rgb(p.r/m,p.y/m,p.b/m);} else col=[1,1,1];
+    if(c>0){
+      const g=Math.min(p.r,p.y,p.b)*0.65; // parte que deixa "lamacento"
+      const r2=p.r-g,y2=p.y-g,b2=p.b-g,m=Math.max(r2,y2,b2);
+      col=ryb2rgb(r2/m,y2/m,b2/m);
+    } else col=[1,1,1];
     if(c+p.w>0){col=col.map(v=>(v*c+p.w)/(c+p.w));} else col=[0,0,0];
-    const d=p.k/T, f=Math.pow(1-d,1.25);
+    const d=p.k/T, f=1-0.72*d; // preto escurece aos poucos
     col=col.map(v=>v*f+0.05*d*(1-d));
     return col.map(v=>Math.max(0,Math.min(1,v)));
   }
@@ -263,8 +278,8 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
     if(h>=12&&h<50&&l<.4) return l<.2?N('Marrom-escuro','Dark brown'):N('Marrom','Brown');
     if(h>=40&&h<70&&l<.33) return N('Verde-oliva','Olive green');
     let b;
-    if(h<12||h>=345) b='Vermelho'; else if(h<42) b='Laranja'; else if(h<64) b='Amarelo'; else if(h<92) b='Verde-limão';
-    else if(h<165) b='Verde'; else if(h<195) b='Turquesa'; else if(h<250) b='Azul'; else if(h<300) b='Roxo'; else b='Magenta';
+    if(h<12||h>=345) b='Vermelho'; else if(h<42) b='Laranja'; else if(h<64) b='Amarelo'; else if(h<100) b='Verde-limão';
+    else if(h<160) b='Verde'; else if(h<195) b='Turquesa'; else if(h<250) b='Azul'; else if(h<300) b='Roxo'; else b='Magenta';
     if(l>.74){
       return ({Vermelho:N('Rosa','Pink'),Magenta:N('Rosa-chiclete','Bubblegum pink'),Laranja:N('Pêssego','Peach'),Roxo:N('Lilás','Lilac'),
         Amarelo:N('Amarelo-clarinho','Light yellow'),Azul:N('Azul-céu','Sky blue'),'Verde-limão':N('Verde-clarinho','Light green'),
@@ -274,6 +289,26 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
     if(l<.28) return b==='Vermelho'?N('Vinho','Burgundy'):b==='Azul'?N('Azul-marinho','Navy blue'):N(b+'-escuro','Dark '+EN[b].toLowerCase());
     return N(b,EN[b]);
   }
+
+  // ---------- Álbum de cores secretas ----------
+  const SECRETS=[
+    {id:'orange', en:'Orange',    names:['Laranja'],                 p:P(1,1,0,0,0),hint:'red plus yellow'},
+    {id:'green',  en:'Green',     names:['Verde'],                   p:P(0,1,1,0,0),hint:'yellow plus blue'},
+    {id:'purple', en:'Purple',    names:['Roxo'],                    p:P(1,0,1,0,0),hint:'red plus blue'},
+    {id:'pink',   en:'Pink',      names:['Rosa','Rosa-forte'],       p:P(1,0,0,1,0),hint:'red plus white'},
+    {id:'sky',    en:'Sky blue',  names:['Azul-céu','Azul-claro'],   p:P(0,0,1,2,0),hint:'blue plus white'},
+    {id:'lilac',  en:'Lilac',     names:['Lilás','Roxo-claro'],      p:P(1,0,1,2,0),hint:'red, blue, and lots of white'},
+    {id:'peach',  en:'Peach',     names:['Pêssego','Laranja-claro'], p:P(1,1,0,1,0),hint:'red, yellow, and white'},
+    {id:'mint',   en:'Mint green',names:['Verde-menta','Verde-claro'],p:P(0,1,1,2,0),hint:'yellow, blue, and lots of white'},
+    {id:'turq',   en:'Turquoise', names:['Turquesa'],                p:P(0,1,2,0,0),hint:'yellow, then blue, then more blue'},
+    {id:'lime',   en:'Lime green',names:['Verde-limão'],             p:P(0,2,1,0,0),hint:'yellow, then blue, then more yellow'},
+    {id:'brown',  en:'Brown',     names:['Marrom','Marrom-escuro'],  p:P(1,1,1,0,0),hint:'red, yellow, and two drops of blue'},
+    {id:'gray',   en:'Gray',      names:['Cinza','Cinza-claro','Cinza-escuro'],p:P(0,0,0,1,1),hint:'white plus black'}
+  ];
+  const ALBUM='mistura-de-tintas-album-v1';
+  let got={};
+  try{const raw=localStorage.getItem(ALBUM);if(raw)got=JSON.parse(raw)||{};}catch(e){}
+  const saveAlbum=()=>{try{localStorage.setItem(ALBUM,JSON.stringify(got))}catch(e){}};
 
   // ---------- Estado ----------
   const STORE='mistura-de-tintas-v1';
@@ -286,9 +321,15 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
   const MAX=30;
   const all=()=>BASE.concat(mine);
   const byId=id=>all().find(j=>j.id===id);
+  // Gota pequena: da 3ª gota colorida em diante, cada gota vale meia gota (a cor muda aos poucos)
+  function addDrop(acc,j,st){
+    const t=sum(j.p),isC=(j.p.r+j.p.y+j.p.b)>0;let wt=1;
+    if(isC){if(st.n>=2)wt=0.5;st.n++;}
+    KEYS.forEach(k=>acc[k]+=j.p[k]/t*wt);
+  }
   function bowlPigment(){
     const p=P(0,0,0,0,0);
-    drops.forEach(id=>{const j=byId(id); if(!j) return; const t=sum(j.p); KEYS.forEach(k=>p[k]+=j.p[k]/t);});
+    const st={n:0};drops.forEach(id=>{const j=byId(id); if(j) addDrop(p,j,st);});
     return p;
   }
 
@@ -371,8 +412,8 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
     save.disabled=!c; $('undoBtn').disabled=!drops.length; $('clearBtn').disabled=!drops.length; $('sayBtn').disabled=!c;
     const ch=$('chain');ch.innerHTML='';
     if(!drops.length){const e=document.createElement('p');e.className='chain-empty';e.textContent='A ordem da mistura aparece aqui';ch.appendChild(e);}
-    const acc=P(0,0,0,0,0);
-    drops.forEach((id,i)=>{const j=byId(id);if(!j)return;const t=sum(j.p);KEYS.forEach(k=>acc[k]+=j.p[k]/t);
+    const acc=P(0,0,0,0,0),st={n:0};
+    drops.forEach((id,i)=>{const j=byId(id);if(!j)return;addDrop(acc,j,st);
       ch.appendChild(step(i?'+':'',rgbOf(j.p),bare(j.en),false,!i&&drops.length===1));
       if(i){const rc=rgbOf(acc);ch.appendChild(step('=',rc,nameOf(rc).en,true,i===drops.length-1));}
     });
@@ -386,6 +427,27 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
     b.setAttribute('aria-label',(op==='+'?'mais ':op==='='?'igual a ':'')+label);
     b.addEventListener('click',()=>en(label,{interrupt:true}));
     return b;
+  }
+  function renderAlbum(newId){
+    const el=$('album');el.innerHTML='';
+    SECRETS.forEach(t=>{
+      const b=document.createElement('button');b.type='button';b.className='secret'+(got[t.id]?' got':'')+(t.id===newId?' new':'');
+      b.style.setProperty('--c',hex(rgbOf(t.p)));
+      b.setAttribute('aria-label',(got[t.id]?'':'Secreta: ')+t.en);
+      b.addEventListener('click',()=>{
+        if(got[t.id]) en(t.en+'!',{interrupt:true});
+        else en('Can you make '+t.en+'? Try '+t.hint+'!',{interrupt:true});
+      });
+      el.appendChild(b);
+    });
+    $('albumCount').textContent=SECRETS.filter(t=>got[t.id]).length+'/12';
+  }
+  function checkAlbum(){ // devolve a cor secreta recém-descoberta (ou null)
+    if(!currentName) return null;
+    const t=SECRETS.find(t=>!got[t.id]&&t.names.includes(currentName.pt));
+    if(!t) return null;
+    got[t.id]=true;saveAlbum();renderAlbum(t.id);
+    return t;
   }
   let toastT;
   function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3000);}
@@ -428,8 +490,9 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
     next();
   }
   const stopSpeech=()=>{seqTok++;try{speechSynthesis.cancel()}catch(e){}};
-  let Q=null;
+  let Q=null,afterDropT=0;
   function openQuiz(j,el){
+    clearTimeout(afterDropT);
     const others=shuffle(Array.from(new Set(POOL.concat(mine.map(m=>m.en))))
       .filter(w=>w.toLowerCase()!==bare(j.en).toLowerCase()&&!/\d$/.test(w))).slice(0,2);
     Q={jar:j,el:el,cands:shuffle([bare(j.en)].concat(others)),idx:0,busy:false};
@@ -467,7 +530,11 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
           const before=currentName;
           drops.push(j.id);plop();renderBowl(true);
           const line=before?before.en+' plus '+bare(j.en)+' makes '+currentName.en+'!':bare(j.en)+'!';
-          setTimeout(()=>speakSeq([[line,'en-US']]),300);
+          const found=checkAlbum();
+          const items=[[line,'en-US',300]];
+          if(found){items.push(['Wow! You found a secret color! '+found.en+'!','en-US']);
+            setTimeout(()=>{chime();toast('Cor secreta: '+found.en+'!');},300);}
+          afterDropT=setTimeout(()=>{if(!Q)speakSeq(items);},300);
         });
       });
     }else if(!yes&&!right){ // acertou que não é: próxima
@@ -527,7 +594,7 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
   });
   $('noAll').addEventListener('click',()=>{editing=false;renderShelf();});
 
-  renderShelf();renderBowl(false);
+  renderShelf();renderBowl(false);renderAlbum();
 })();
 </script>
 </body>
