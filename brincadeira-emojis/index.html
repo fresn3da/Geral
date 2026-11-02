@@ -1,20 +1,25 @@
 <title>Cadê a Banana?</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@600;800&display=swap">
 <style>
-/* Layout: one screen — question bubble on top, 2x2 giant tiles, hint bulbs at the bottom. Deliberate single bright theme (toy look). */
+/* Layout: two mirrored halves on one tablet — top half turned upside down — split by a slim theme bar. Deliberate single bright theme (toy look). */
 :root {
   --sky: #CFEAF2;
   --sky-deep: #A9D6E5;
+  --peach: #FFE1CF;
+  --peach-deep: #F6BE9C;
   --tile: #FFFFFF;
   --ink: #1F3347;
   --ink-soft: #4F6578;
   --tomato: #FF6B3D;
   --sun: #FFC83A;
   --leaf: #2FB57A;
+  --leaf-deep: #1F8A5B;
+  --berry: #E5484D;
   --font-display: "Baloo 2", "Nunito", system-ui, sans-serif;
   --font-body: "Nunito", system-ui, sans-serif;
   color-scheme: light;
@@ -22,7 +27,7 @@
 html, body { height: 100%; }
 [hidden] { display: none !important; }
 body {
-  background: var(--sky);
+  background: var(--ink);
   color: var(--ink);
   font-family: var(--font-body);
   margin: 0;
@@ -30,79 +35,98 @@ body {
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   touch-action: manipulation;
 }
-.app {
-  height: 100%;
+.app { height: 100%; display: flex; flex-direction: column; }
+
+/* Each player's half */
+.half {
+  --bg: var(--sky); --deep: var(--sky-deep);
+  flex: 1; min-height: 0;
+  background: var(--bg);
+  container-type: size;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   padding-block: 12px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  max-width: 720px;
-  margin: 0 auto;
 }
-.top { display: flex; align-items: center; gap: 8px; }
-.cats { display: flex; flex-wrap: wrap; gap: 6px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; padding: 2px; }
-.cats::-webkit-scrollbar { display: none; }
-.cat {
-  flex: none; border: 0; border-radius: 999px; padding: 6px 12px;
-  background: var(--sky-deep); color: var(--ink); font: 800 15px var(--font-body);
-  cursor: pointer;
-}
-.cat[aria-pressed="true"] { background: var(--ink); color: var(--tile); }
-.stars {
-  flex: none; font: 800 20px var(--font-display); background: var(--tile);
-  border-radius: 999px; padding: 2px 12px; font-variant-numeric: tabular-nums;
-}
+.half.top { transform: rotate(180deg); --bg: var(--peach); --deep: var(--peach-deep); }
+.inner { height: 100%; max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+
 .bubble {
-  background: var(--tile); border-radius: 28px; padding: 10px 16px;
-  display: flex; align-items: center; gap: 12px; min-height: 64px;
-  box-shadow: 0 4px 0 var(--sky-deep);
+  background: var(--tile); border-radius: 24px; padding: 6px 10px 6px 16px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 4px 0 var(--deep);
 }
 .bubble-text { flex: 1; min-width: 0; }
-.question { font: 800 clamp(26px, 7vw, 40px)/1.1 var(--font-display); margin: 0; text-wrap: balance; }
+.question { font: 800 clamp(22px, 7cqh, 38px)/1.1 var(--font-display); margin: 0; }
 .question b { color: var(--tomato); }
-.say { font: 600 clamp(16px, 4.2vw, 20px)/1.25 var(--font-body); color: var(--ink-soft); margin: 2px 0 0; min-height: 1.25em; }
-.speak {
-  flex: none; width: 56px; height: 56px; border-radius: 50%; border: 0;
-  background: var(--sun); font-size: 28px; cursor: pointer;
+.say { font: 700 clamp(14px, 4cqh, 20px)/1.25 var(--font-body); color: var(--ink-soft); margin: 2px 0 0; min-height: 1.25em; }
+.stars {
+  flex: none; font: 800 22px var(--font-display); background: var(--bg);
+  border-radius: 999px; padding: 2px 12px; font-variant-numeric: tabular-nums;
 }
+
 .grid {
   flex: 1; min-height: 0;
-  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 14px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+}
+@container (max-aspect-ratio: 7/4) {
+  .grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 }
 .tile {
-  border: 0; border-radius: 32px; background: var(--tile); cursor: pointer;
+  position: relative;
+  border: 0; border-radius: 28px; background: var(--tile); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  font-size: min(22vw, 17vh, 150px); line-height: 1;
-  box-shadow: 0 8px 0 var(--sky-deep);
-  transition: transform .15s ease, opacity .4s ease, box-shadow .15s ease;
-  min-height: 0; min-width: 0;
+  font-size: min(20cqh, 18cqw, 140px); line-height: 1;
+  box-shadow: 0 7px 0 var(--deep);
+  transition: transform .15s ease, opacity .4s ease, box-shadow .15s ease, background .2s ease;
+  min-height: 0; min-width: 0; padding: 0;
+  touch-action: manipulation;
 }
-.tile:active { transform: translateY(4px); box-shadow: 0 4px 0 var(--sky-deep); }
+.tile:active { transform: translateY(3px); box-shadow: 0 4px 0 var(--deep); }
 .tile.gone { opacity: 0; transform: scale(.4); pointer-events: none; }
-.tile.wrong { animation: shake .45s ease; }
-.tile.right { background: var(--leaf); box-shadow: 0 8px 0 #1F8A5B; animation: hop .7s ease; }
-.tile:focus-visible, .cat:focus-visible, .speak:focus-visible, .hint:focus-visible, .start:focus-visible { outline: 4px solid var(--tomato); outline-offset: 3px; }
-.bottom { display: flex; justify-content: center; gap: 16px; }
+.tile.wrong { background: var(--berry); box-shadow: 0 7px 0 #A32D31; animation: shake .45s ease; }
+.tile.right { background: var(--leaf); box-shadow: 0 7px 0 var(--leaf-deep); animation: hop .7s ease; }
+.tile.reveal { outline: 6px dashed var(--leaf); outline-offset: -6px; animation: hop 1s ease 2; }
+.half.done .tile:not(.right):not(.reveal):not(.wrong) { opacity: .35; }
+.tile:focus-visible, .hint:focus-visible, .chip:focus-visible, .start:focus-visible { outline: 4px solid var(--tomato); outline-offset: 3px; }
+
+.bottom { display: flex; justify-content: center; align-items: center; gap: 14px; }
 .hint {
-  border: 0; border-radius: 999px; padding: 8px 22px 8px 14px; cursor: pointer;
+  border: 0; border-radius: 999px; padding: 6px 20px 6px 12px; cursor: pointer;
   background: var(--sun); color: var(--ink); font: 800 20px var(--font-display);
   display: flex; align-items: center; gap: 6px; box-shadow: 0 5px 0 #D9A21C;
+  touch-action: manipulation;
 }
-.hint span { font-size: 30px; }
-.hint:disabled { background: var(--sky-deep); box-shadow: none; opacity: .55; cursor: default; }
+.hint span { font-size: 28px; }
+.hint:disabled { background: var(--deep); box-shadow: none; opacity: .55; cursor: default; }
+.waiting { font: 800 18px var(--font-display); color: var(--ink-soft); }
+
+/* Center bar, readable from both sides: emoji only */
+.mid {
+  flex: none; display: flex; justify-content: center; align-items: center; gap: 10px;
+  padding-block: 6px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--ink);
+}
+.chip {
+  border: 0; border-radius: 999px; width: 48px; height: 40px; font-size: 24px;
+  background: #34506A; cursor: pointer; padding: 0;
+}
+.chip[aria-pressed="true"] { background: var(--sun); }
+.chip.voice { margin-left: 10px; }
+
 .overlay {
   position: fixed; inset: 0; background: var(--sky);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
   padding: 24px; text-align: center; z-index: 5;
 }
-.overlay .big { font-size: 96px; animation: hop 1.6s ease infinite; }
-.overlay h1 { font: 800 clamp(40px, 11vw, 64px)/1 var(--font-display); margin: 0; }
-.overlay p { font-size: 18px; max-width: 34ch; margin: 0; color: var(--ink-soft); line-height: 1.4; }
+.overlay .big { font-size: 90px; animation: hop 1.6s ease infinite; }
+.overlay h1 { font: 800 clamp(40px, 9vw, 64px)/1 var(--font-display); margin: 0; }
+.overlay p { font-size: 19px; max-width: 38ch; margin: 0; color: var(--ink-soft); line-height: 1.45; }
 .start {
   border: 0; border-radius: 999px; padding: 14px 44px; cursor: pointer;
   background: var(--tomato); color: var(--tile); font: 800 30px var(--font-display);
@@ -110,42 +134,45 @@ body {
 }
 .confetti { position: fixed; pointer-events: none; font-size: 34px; z-index: 4; animation: fly 1.2s ease-out forwards; }
 @keyframes shake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-12px) } 40% { transform: translateX(12px) } 60% { transform: translateX(-8px) } 80% { transform: translateX(8px) } }
-@keyframes hop { 0%,100% { transform: scale(1) } 30% { transform: scale(1.12) rotate(-4deg) } 60% { transform: scale(.96) rotate(3deg) } }
+@keyframes hop { 0%,100% { transform: scale(1) } 30% { transform: scale(1.1) rotate(-4deg) } 60% { transform: scale(.97) rotate(3deg) } }
 @keyframes fly { from { transform: translate(0,0) scale(.6); opacity: 1 } to { transform: translate(var(--dx), var(--dy)) scale(1.2) rotate(var(--rot)); opacity: 0 } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 
 <div class="app">
-  <div class="top">
-    <div class="cats" id="cats" role="group" aria-label="Escolher tema"></div>
-    <div class="stars" id="stars" aria-label="Acertos">⭐ 0</div>
-  </div>
-  <div class="bubble">
-    <div class="bubble-text">
-      <p class="question" id="question">Cadê a <b>banana</b>?</p>
-      <p class="say" id="say">Toque na figura certa.</p>
-    </div>
-    <button class="speak" id="speak" aria-label="Falar de novo">🔊</button>
-  </div>
-  <div class="grid" id="grid">
-    <button class="tile">🍎</button><button class="tile">🍌</button><button class="tile">🍇</button><button class="tile">🍓</button>
-  </div>
-  <div class="bottom">
-    <button class="hint" id="hint1"><span>💡</span>Dica</button>
-    <button class="hint" id="hint2"><span>💡</span>Dica</button>
-  </div>
+  <section class="half top" id="p0" aria-label="Jogador de cima"></section>
+  <nav class="mid" id="mid" aria-label="Escolher tema"></nav>
+  <section class="half bottom-half" id="p1" aria-label="Jogador de baixo"></section>
 </div>
 
 <div class="overlay" id="overlay">
   <div class="big">🍌</div>
   <h1>Cadê a Banana?</h1>
-  <p>Quatro figuras na tela. Ouça a pergunta e toque na certa. Tem duas lâmpadas de dica em cada rodada.</p>
+  <p>Deite o iPad na mesa, um de cada lado. Os dois respondem o mesmo desafio e cada um tem duas dicas. Só passa para o próximo quando os dois tiverem respondido.</p>
   <button class="start" id="start">Jogar</button>
 </div>
 
+<template id="half-tpl">
+  <div class="inner">
+    <div class="bubble">
+      <div class="bubble-text">
+        <p class="question"></p>
+        <p class="say"></p>
+      </div>
+      <div class="stars">⭐ 0</div>
+    </div>
+    <div class="grid"></div>
+    <div class="bottom">
+      <button class="hint" data-n="0"><span>💡</span>Dica</button>
+      <button class="hint" data-n="1"><span>💡</span>Dica</button>
+      <span class="waiting" hidden>Esperando o outro… ⏳</span>
+    </div>
+  </div>
+</template>
+
 <script>
 const CATS = {
-  frutas: { label: "🍎 Frutas", items: [
+  frutas: { icon: "🍎", name: "Frutas", items: [
     ["🍌","a","banana",["É amarela e o macaco adora!","É comprida e a gente tira a casca."]],
     ["🍎","a","maçã",["É vermelha e redondinha.","Faz crec crec quando morde!"]],
     ["🍇","a","uva",["São bolinhas roxas juntinhas.","Vem num cacho cheio de bolinhas."]],
@@ -157,7 +184,7 @@ const CATS = {
     ["🍒","a","cereja",["São duas bolinhas vermelhas.","Ficam penduradas num cabinho."]],
     ["🍋","o","limão",["É azedo! Faz careta!","É amarelinho e a gente faz limonada."]],
   ]},
-  animais: { label: "🐶 Bichos", items: [
+  animais: { icon: "🐶", name: "Bichos", items: [
     ["🐶","o","cachorro",["Faz au au!","Abana o rabo quando está feliz."]],
     ["🐱","o","gato",["Faz miau!","Gosta de leite e de dormir."]],
     ["🐮","a","vaca",["Faz muuu!","Dá leite pra gente."]],
@@ -171,7 +198,7 @@ const CATS = {
     ["🐟","o","peixe",["Mora na água.","Nada, nada, nada!"]],
     ["🦆","o","pato",["Faz quá quá!","Nada no lago."]],
   ]},
-  transportes: { label: "🚗 Transportes", items: [
+  transportes: { icon: "🚗", name: "Transportes", items: [
     ["🚗","o","carro",["Faz bi bi!","Tem quatro rodas e leva a família."]],
     ["🚌","o","ônibus",["É comprido e leva muita gente.","Para no ponto pra gente subir."]],
     ["✈️","o","avião",["Voa lá no céu bem alto.","Tem asas, mas não é passarinho."]],
@@ -185,7 +212,7 @@ const CATS = {
     ["🏍️","a","moto",["Tem duas rodas e faz vrum vrum!","Precisa de capacete pra andar."]],
     ["🚜","o","trator",["Trabalha na fazenda.","Tem rodas grandonas atrás."]],
   ]},
-  cores: { label: "🎨 Cores", items: [
+  cores: { icon: "🎨", name: "Cores", items: [
     ["🔴","o","vermelho",["É a cor do morango.","É a cor do carro de bombeiro."]],
     ["🔵","o","azul",["É a cor do céu.","É a cor do mar."]],
     ["🟡","o","amarelo",["É a cor do sol.","É a cor da banana."]],
@@ -198,23 +225,23 @@ const CATS = {
   ]},
 };
 const ORDER = ["misturado","frutas","animais","transportes","cores"];
-const PRAISE = ["Muito bem!","Isso mesmo!","Parabéns!","Que esperta!","Acertou!","Uhuu!"];
+const PRAISE = ["Muito bem!","Isso mesmo!","Parabéns!","Acertou!","Uhuu!"];
 
-let cat = "misturado", round = null, stars = 0, hintsUsed = 0, locked = false, lastAnswer = null;
-const $ = id => document.getElementById(id);
+let cat = "misturado", round = null, lastAnswer = null, nextTimer = null;
+const players = [0, 1].map(i => ({ el: document.getElementById("p" + i), stars: 0 }));
 
 // Voz
 let voice = null;
 function pickVoice() {
   try {
     const vs = speechSynthesis.getVoices();
-    voice = vs.find(v => v.lang === "pt-BR") || vs.find(v => v.lang && v.lang.startsWith("pt")) || null;
+    voice = vs.find(v => v.lang === "pt-BR") || vs.find(v => v.lang && v.lang.replace("_", "-").startsWith("pt")) || null;
   } catch (e) {}
 }
 try { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; } catch (e) {}
-function speak(text) {
+function speak(text, interrupt) {
   try {
-    speechSynthesis.cancel();
+    if (interrupt) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "pt-BR"; u.rate = 0.9; u.pitch = 1.2;
     if (voice) u.voice = voice;
@@ -222,92 +249,130 @@ function speak(text) {
   } catch (e) {}
 }
 
+// Toque rápido e multitoque: os dois podem tocar ao mesmo tempo
+function onTap(el, fn) {
+  el.addEventListener("pointerdown", e => { e.preventDefault(); fn(); });
+  el.addEventListener("click", e => { if (e.detail === 0) fn(); }); // teclado
+}
+
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const cadê = it => `Cadê ${it[1]} ${it[2]}?`;
 const esse = it => `${it[1] === "a" ? "Essa é a" : "Esse é o"} ${it[2]}.`;
 
-function renderCats() {
-  $("cats").innerHTML = "";
+// Monta as duas metades
+for (const [i, p] of players.entries()) {
+  p.el.appendChild(document.getElementById("half-tpl").content.cloneNode(true));
+  p.q = p.el.querySelector(".question");
+  p.say = p.el.querySelector(".say");
+  p.starsEl = p.el.querySelector(".stars");
+  p.grid = p.el.querySelector(".grid");
+  p.hints = [...p.el.querySelectorAll(".hint")];
+  p.wait = p.el.querySelector(".waiting");
+  p.hints.forEach(h => onTap(h, () => useHint(i)));
+}
+
+function renderMid() {
+  const mid = document.getElementById("mid");
+  mid.innerHTML = "";
   for (const key of ORDER) {
     const b = document.createElement("button");
-    b.className = "cat";
-    b.textContent = key === "misturado" ? "🎲 Tudo" : CATS[key].label;
+    b.className = "chip";
+    b.textContent = key === "misturado" ? "🎲" : CATS[key].icon;
+    b.setAttribute("aria-label", key === "misturado" ? "Tudo misturado" : CATS[key].name);
     b.setAttribute("aria-pressed", String(key === cat));
-    b.onclick = () => { cat = key; renderCats(); newRound(); };
-    $("cats").appendChild(b);
+    onTap(b, () => { cat = key; renderMid(); newRound(); });
+    mid.appendChild(b);
   }
+  const v = document.createElement("button");
+  v.className = "chip voice";
+  v.textContent = "🔊";
+  v.setAttribute("aria-label", "Repetir a pergunta");
+  onTap(v, () => { if (round) speak(cadê(round.answer), true); });
+  mid.appendChild(v);
 }
 
 function newRound() {
+  clearTimeout(nextTimer);
   const key = cat === "misturado" ? shuffle(Object.keys(CATS))[0] : cat;
-  let pool = CATS[key].items.filter(it => it[2] !== lastAnswer);
+  const pool = CATS[key].items.filter(it => it[2] !== lastAnswer);
   const four = shuffle(pool).slice(0, 4);
   const answer = four[Math.random() * 4 | 0];
   lastAnswer = answer[2];
-  round = { four, answer, gone: new Set() };
-  hintsUsed = 0; locked = false;
-  $("question").innerHTML = `Cadê ${answer[1]} <b>${answer[2]}</b>?`;
-  $("say").textContent = "Toque na figura certa.";
-  const grid = $("grid"); grid.innerHTML = "";
-  four.forEach((it, i) => {
-    const b = document.createElement("button");
-    b.className = "tile";
-    b.textContent = it[0];
-    b.setAttribute("aria-label", it[2]);
-    b.onclick = () => choose(i, b);
-    grid.appendChild(b);
+  round = { four, answer };
+  players.forEach(p => {
+    p.done = false; p.hintsUsed = 0; p.gone = new Set();
+    p.el.classList.remove("done");
+    p.q.innerHTML = `Cadê ${answer[1]} <b>${answer[2]}</b>?`;
+    p.say.textContent = "Toque na figura certa.";
+    p.wait.hidden = true;
+    p.hints.forEach(h => { h.hidden = false; h.disabled = false; });
+    p.grid.innerHTML = "";
+    p.tiles = four.map((it, idx) => {
+      const b = document.createElement("button");
+      b.className = "tile";
+      b.textContent = it[0];
+      b.setAttribute("aria-label", it[2]);
+      onTap(b, () => choose(players.indexOf(p), idx));
+      p.grid.appendChild(b);
+      return b;
+    });
   });
-  updateHints();
-  speak(cadê(answer));
+  speak(cadê(answer), true);
 }
 
-function choose(i, el) {
-  if (locked || round.gone.has(i)) return;
-  const it = round.four[i];
+function choose(pi, idx) {
+  const p = players[pi];
+  if (!round || p.done || p.gone.has(idx)) return;
+  const it = round.four[idx], el = p.tiles[idx];
+  p.done = true;
+  p.el.classList.add("done");
+  p.hints.forEach(h => h.hidden = true);
   if (it === round.answer) {
-    locked = true;
     el.classList.add("right");
-    stars++; $("stars").textContent = "⭐ " + stars;
-    const p = PRAISE[Math.random() * PRAISE.length | 0];
-    $("say").textContent = `${p} ${esse(it)}`;
-    speak(`${p} ${esse(it)}`);
+    p.stars++; p.starsEl.textContent = "⭐ " + p.stars;
+    const praise = PRAISE[Math.random() * PRAISE.length | 0];
+    p.say.textContent = `${praise} ${esse(it)}`;
+    speak(praise);
     burst(el);
-    setTimeout(newRound, 2600);
   } else {
-    el.classList.remove("wrong"); void el.offsetWidth; el.classList.add("wrong");
-    const msg = `${esse(it)} ${cadê(round.answer)}`;
-    $("say").textContent = msg;
-    speak(msg);
+    el.classList.add("wrong");
+    p.tiles[round.four.indexOf(round.answer)].classList.add("reveal");
+    p.say.textContent = `Ops! ${esse(it)} ${round.answer[1] === "a" ? "A" : "O"} ${round.answer[2]} é esse aqui.`;
+    speak(`${esse(it)}`);
+  }
+  const other = players[1 - pi];
+  if (other.done) {
+    players.forEach(q => q.wait.hidden = true);
+    nextTimer = setTimeout(newRound, 3000);
+  } else {
+    p.wait.hidden = false;
   }
 }
 
-function useHint() {
-  if (locked || hintsUsed >= 2) return;
-  const wrong = round.four.map((it, i) => i).filter(i => round.four[i] !== round.answer && !round.gone.has(i));
+function useHint(pi) {
+  const p = players[pi];
+  if (!round || p.done || p.hintsUsed >= 2) return;
+  const wrong = round.four.map((_, i) => i).filter(i => round.four[i] !== round.answer && !p.gone.has(i));
   const kill = wrong[Math.random() * wrong.length | 0];
-  round.gone.add(kill);
-  $("grid").children[kill].classList.add("gone");
-  const phrase = round.answer[3][hintsUsed];
-  hintsUsed++;
-  $("say").textContent = "💡 " + phrase;
-  speak(phrase);
-  updateHints();
-}
-function updateHints() {
-  $("hint1").disabled = hintsUsed >= 1;
-  $("hint2").disabled = hintsUsed >= 2;
+  p.gone.add(kill);
+  p.tiles[kill].classList.add("gone");
+  const phrase = round.answer[3][p.hintsUsed];
+  p.hints[p.hintsUsed].disabled = true;
+  p.hintsUsed++;
+  p.say.textContent = "💡 " + phrase;
+  speak(phrase, true);
 }
 
 function burst(el) {
   const r = el.getBoundingClientRect();
   const bits = ["⭐","🎉","✨","💛","🌟"];
-  for (let k = 0; k < 14; k++) {
+  for (let k = 0; k < 12; k++) {
     const s = document.createElement("span");
     s.className = "confetti";
     s.textContent = bits[k % bits.length];
     s.style.left = (r.left + r.width / 2 - 17) + "px";
     s.style.top = (r.top + r.height / 2 - 17) + "px";
-    const ang = Math.random() * Math.PI * 2, dist = 120 + Math.random() * 160;
+    const ang = Math.random() * Math.PI * 2, dist = 90 + Math.random() * 140;
     s.style.setProperty("--dx", Math.cos(ang) * dist + "px");
     s.style.setProperty("--dy", Math.sin(ang) * dist + "px");
     s.style.setProperty("--rot", (Math.random() * 720 - 360) + "deg");
@@ -316,9 +381,10 @@ function burst(el) {
   }
 }
 
-$("hint1").onclick = useHint;
-$("hint2").onclick = useHint;
-$("speak").onclick = () => { if (round) speak(cadê(round.answer)); };
-$("start").onclick = () => { $("overlay").hidden = true; newRound(); };
-renderCats();
+renderMid();
+document.getElementById("start").addEventListener("click", () => {
+  document.getElementById("overlay").hidden = true;
+  try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}
+  newRound();
+});
 </script>
