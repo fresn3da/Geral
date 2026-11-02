@@ -117,7 +117,11 @@ body {
   background: #34506A; cursor: pointer; padding: 0;
 }
 .chip[aria-pressed="true"] { background: var(--sun); }
-.chip.voice { margin-left: 10px; }
+.chip.voice, .chip.mode { margin-left: 10px; }
+.modes { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.start.alt { background: var(--leaf); box-shadow: 0 7px 0 var(--leaf-deep); }
+.start small { display: block; font: 700 15px var(--font-body); opacity: .9; }
+.badge { position: absolute; top: 6px; right: 10px; font-size: .38em; }
 
 .overlay {
   position: fixed; inset: 0; background: var(--sky);
@@ -148,8 +152,11 @@ body {
 <div class="overlay" id="overlay">
   <div class="big">🍌</div>
   <h1>Cadê a Banana?</h1>
-  <p>Deite o iPad na mesa, um de cada lado. Os dois respondem o mesmo desafio e cada um tem duas dicas. Só passa para o próximo quando os dois tiverem respondido.</p>
-  <button class="start" id="start">Jogar</button>
+  <p>Deite o iPad na mesa, um de cada lado. Os dois veem o mesmo desafio e cada um tem duas dicas.</p>
+  <div class="modes">
+    <button class="start" id="start-juntos">🤝 Juntos<small>Os dois respondem</small></button>
+    <button class="start alt" id="start-corrida">🏁 Corrida<small>Quem tocar primeiro</small></button>
+  </div>
 </div>
 
 <template id="half-tpl">
@@ -227,7 +234,7 @@ const CATS = {
 const ORDER = ["misturado","frutas","animais","transportes","cores"];
 const PRAISE = ["Muito bem!","Isso mesmo!","Parabéns!","Acertou!","Uhuu!"];
 
-let cat = "misturado", round = null, lastAnswer = null, nextTimer = null;
+let mode = "juntos", cat = "misturado", round = null, lastAnswer = null, nextTimer = null;
 const players = [0, 1].map(i => ({ el: document.getElementById("p" + i), stars: 0 }));
 
 // Voz
@@ -283,6 +290,12 @@ function renderMid() {
     onTap(b, () => { cat = key; renderMid(); newRound(); });
     mid.appendChild(b);
   }
+  const m = document.createElement("button");
+  m.className = "chip mode";
+  m.textContent = mode === "corrida" ? "🏁" : "🤝";
+  m.setAttribute("aria-label", mode === "corrida" ? "Modo corrida, tocar para mudar para juntos" : "Modo juntos, tocar para mudar para corrida");
+  onTap(m, () => { mode = mode === "corrida" ? "juntos" : "corrida"; renderMid(); newRound(); speak(mode === "corrida" ? "Modo corrida! Quem tocar primeiro." : "Modo juntos! Os dois respondem.", false); });
+  mid.appendChild(m);
   const v = document.createElement("button");
   v.className = "chip voice";
   v.textContent = "🔊";
@@ -323,6 +336,7 @@ function newRound() {
 function choose(pi, idx) {
   const p = players[pi];
   if (!round || p.done || p.gone.has(idx)) return;
+  if (mode === "corrida") return race(pi, idx);
   const it = round.four[idx], el = p.tiles[idx];
   p.done = true;
   p.el.classList.add("done");
@@ -347,6 +361,32 @@ function choose(pi, idx) {
   } else {
     p.wait.hidden = false;
   }
+}
+
+// Corrida: o primeiro toque encerra a rodada para os dois
+function race(pi, idx) {
+  const p = players[pi], other = players[1 - pi];
+  const it = round.four[idx], el = p.tiles[idx];
+  const right = round.four.indexOf(round.answer);
+  players.forEach(q => { q.done = true; q.el.classList.add("done"); q.hints.forEach(h => h.hidden = true); q.wait.hidden = true; });
+  if (it === round.answer) {
+    el.classList.add("right");
+    el.insertAdjacentHTML("beforeend", '<span class="badge">🏆</span>');
+    p.stars++; p.starsEl.textContent = "⭐ " + p.stars;
+    p.say.textContent = `🏆 Você ganhou! ${esse(it)}`;
+    other.say.textContent = `O outro foi mais rápido! ${esse(it)}`;
+    other.tiles[right].classList.add("reveal");
+    speak("Muito bem! Ganhou!", true);
+    burst(el);
+  } else {
+    el.classList.add("wrong");
+    p.tiles[right].classList.add("reveal");
+    other.tiles[right].classList.add("reveal");
+    p.say.textContent = `Ops! ${esse(it)} Ninguém ganhou essa.`;
+    other.say.textContent = `O outro errou. ${round.answer[1] === "a" ? "A" : "O"} ${round.answer[2]} é esse aqui.`;
+    speak(`${esse(it)}`, true);
+  }
+  nextTimer = setTimeout(newRound, 3200);
 }
 
 function useHint(pi) {
@@ -382,9 +422,12 @@ function burst(el) {
 }
 
 renderMid();
-document.getElementById("start").addEventListener("click", () => {
+function begin(m) {
+  mode = m; renderMid();
   document.getElementById("overlay").hidden = true;
   try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}
   newRound();
-});
+}
+document.getElementById("start-juntos").addEventListener("click", () => begin("juntos"));
+document.getElementById("start-corrida").addEventListener("click", () => begin("corrida"));
 </script>
