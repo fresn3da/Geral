@@ -14,6 +14,8 @@
   --accent:#2F5BD3;     /* botões neutros */
   --good:#1E9E5A;       /* acerto */
   --bad:#D8433B;        /* erro */
+  --good-deep:#147A43;
+  --bad-deep:#A72E28;
   --font-display:"Fredoka","Baloo 2","Trebuchet MS",system-ui,sans-serif;
   --font-body:"Nunito","Segoe UI",system-ui,sans-serif;
   color-scheme:light;
@@ -101,31 +103,36 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
 .confirm .btn{font-size:14px;padding:6px 10px}
 .drop{position:fixed;left:0;top:0;width:30px;height:30px;border-radius:50% 50% 50% 0;pointer-events:none;z-index:50;border:2px solid rgba(29,39,66,.18)}
 
-/* Quiz */
-.veil{position:fixed;inset:0;z-index:40;background:rgba(29,39,66,.35);display:flex;align-items:flex-end;justify-content:center;
-  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));
-  padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));animation:fade .2s ease}
+/* Quiz: tela cheia, só cor + voz + Sim/Não (para quem ainda não lê) */
+.veil{position:fixed;inset:0;z-index:40;background:var(--paper);display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));animation:fade .2s ease}
 @keyframes fade{from{opacity:0}}
-.sheet{width:100%;max-width:560px;background:var(--paper);border-radius:28px;padding:16px;display:flex;flex-direction:column;gap:12px;
-  box-shadow:0 -6px 30px rgba(29,39,66,.25);animation:rise .25s ease-out}
-@keyframes rise{from{transform:translateY(40px);opacity:0}}
-.q-top{display:flex;align-items:center;gap:12px}
-.q-top .pot{flex:none;width:64px;height:64px}
-.q-pt{flex:1;min-width:0}
-.q-pt b{display:block;font-family:var(--font-display);font-weight:700;font-size:30px;line-height:1.1}
-.q-pt span{font-weight:800;color:var(--ink-soft);font-size:17px}
-.q-close{flex:none;width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:var(--paper);font-size:24px;font-weight:800;line-height:1}
-.opts{display:flex;flex-direction:column;gap:8px}
-.opt{display:flex;align-items:stretch;border-radius:18px;background:var(--table);box-shadow:0 4px 0 var(--line);overflow:hidden}
-.opt .ans{flex:1;border:none;background:none;text-align:left;padding:14px 16px;font-family:var(--font-display);font-weight:600;font-size:24px}
-.opt .hear{flex:none;width:58px;border:none;border-left:2px solid var(--line);background:none;display:grid;place-items:center}
-.opt .hear svg{width:24px;height:24px}
-.opt.wrong{background:#FBE3E1;box-shadow:0 4px 0 var(--bad);animation:shake .4s}
-.opt.wrong .ans{color:var(--bad);text-decoration:line-through}
-.opt.right{background:#DDF4E6;box-shadow:0 4px 0 var(--good)}
-.opt.right .ans{color:var(--good)}
-@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
-.q-msg{margin:0;min-height:22px;font-weight:800;text-align:center}
+.q-head{width:100%;max-width:560px;display:flex;justify-content:space-between;align-items:center;flex:none}
+.q-dots{display:flex;gap:10px}
+.q-dots i{width:16px;height:16px;border-radius:50%;background:var(--line);transition:background-color .3s}
+.q-dots i.now{background:var(--ink)}
+.q-dots i.done{background:var(--good)}
+.q-close{width:52px;height:52px;border-radius:50%;border:2px solid var(--line);background:var(--paper);font-size:28px;font-weight:800;line-height:1}
+.q-pt{flex:none;margin:0;font-family:var(--font-display);font-weight:700;font-size:30px;line-height:1.1;text-align:center}
+.q-swatch{flex:1 1 auto;min-height:120px;width:100%;max-width:560px;container-type:size;display:grid;place-items:center;border:none;background:none;padding:0}
+.q-blob{position:relative;width:min(100cqw,100cqh,380px);aspect-ratio:1;border-radius:50%;border:8px solid var(--line);
+  background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.55),rgba(255,255,255,0) 30%),var(--c)}
+.q-blob.pop{animation:pop .7s ease}
+@keyframes pop{40%{transform:scale(1.12) rotate(-5deg)}70%{transform:scale(.96)}}
+.q-play{position:absolute;right:2%;bottom:2%;width:30%;max-width:96px;min-width:64px;aspect-ratio:1;border-radius:50%;background:var(--ink);color:var(--paper);
+  display:grid;place-items:center;box-shadow:0 5px 0 rgba(29,39,66,.3)}
+.q-play svg{width:52%;height:52%}
+.q-word{flex:none;margin:0;font-family:var(--font-display);font-weight:600;font-size:40px;line-height:1.1;min-height:44px;color:var(--ink)}
+.q-answers{flex:none;width:100%;max-width:560px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.yn{height:clamp(96px,18vh,150px);border:none;border-radius:30px;display:grid;place-items:center;color:#fff;transition:transform .1s}
+.yn svg{width:44%;max-width:84px;height:auto}
+.yn.yes{background:var(--good);box-shadow:0 7px 0 var(--good-deep)}
+.yn.no{background:var(--bad);box-shadow:0 7px 0 var(--bad-deep)}
+.yn:active{transform:translateY(5px);box-shadow:none}
+.yn:disabled{opacity:.5}
+.yn.shake{animation:shake .45s}
+@keyframes shake{25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
 @media (min-height:880px){.pot{width:62px;height:62px}.color-name{font-size:34px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -171,15 +178,19 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
   </section>
 </div>
 
-<div class="veil" id="veil" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qName">
-    <div class="q-top">
-      <span class="pot" id="qPot"></span>
-      <div class="q-pt"><b id="qName">Vermelho</b><span>Como é em inglês?</span></div>
-      <button class="q-close" id="qClose" type="button" aria-label="Fechar">×</button>
-    </div>
-    <div class="opts" id="opts"></div>
-    <p class="q-msg" id="qMsg"></p>
+<div class="veil" id="veil" hidden role="dialog" aria-modal="true" aria-labelledby="qName">
+  <div class="q-head">
+    <div class="q-dots" id="qDots" aria-hidden="true"><i></i><i></i><i></i></div>
+    <button class="q-close" id="qClose" type="button" aria-label="Fechar">×</button>
+  </div>
+  <p class="q-pt" id="qName">Azul</p>
+  <button class="q-swatch" id="qSwatch" type="button" aria-label="Ouvir de novo">
+    <span class="q-blob" id="qBlob"><span class="q-play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg></span></span>
+  </button>
+  <p class="q-word" id="qWord" aria-live="polite"></p>
+  <div class="q-answers">
+    <button class="yn yes" id="qYes" type="button" aria-label="Sim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5L19.5 6.5"/></svg></button>
+    <button class="yn no" id="qNo" type="button" aria-label="Não"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
 </div>
 
@@ -371,55 +382,85 @@ h1{font-family:var(--font-display);font-weight:700;font-size:26px;margin:0;line-
     anim.onfinish=()=>{d.remove();done();};
   }
 
-  // ---------- Quiz de inglês ----------
+  // ---------- Quiz de inglês: ouvir e responder Sim/Não ----------
   const POOL=['Red','Yellow','Blue','White','Black','Green','Orange','Purple','Pink','Brown','Gray'];
   const shuffle=a=>{for(let i=a.length-1;i>0;i--){const k=Math.floor(Math.random()*(i+1));[a[i],a[k]]=[a[k],a[i]];}return a;};
-  const SPK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>';
-  let quizJar=null,quizEl=null,quizDone=false;
-  function openQuiz(j,el){
-    quizJar=j;quizEl=el;quizDone=false;
-    $('qPot').style.setProperty('--c',hex(rgbOf(j.p)));
-    $('qName').textContent=j.name;
-    $('qMsg').textContent='';
-    const answer=j.en;
-    const extra=mine.map(m=>m.en);
-    const others=shuffle(Array.from(new Set(POOL.concat(extra))).filter(w=>w.toLowerCase()!==answer.toLowerCase()&&!/\d$/.test(w))).slice(0,2);
-    const list=shuffle([answer].concat(others));
-    const box=$('opts');box.innerHTML='';
-    list.forEach(w=>{
-      const row=document.createElement('div');row.className='opt';
-      const a=document.createElement('button');a.type='button';a.className='ans';a.textContent=w;
-      const h=document.createElement('button');h.type='button';h.className='hear';h.innerHTML=SPK;h.setAttribute('aria-label','Ouvir '+w);
-      h.addEventListener('click',()=>en(w,{interrupt:true}));
-      a.addEventListener('click',()=>answerQuiz(w,row));
-      row.append(a,h);box.appendChild(row);
-    });
-    $('veil').hidden=false;
-    pt(j.name+'. Como é em inglês?',{interrupt:true});
+  let seqTok=0;
+  function sayCb(text,lang,cb){
+    let fired=false;const fin=()=>{if(fired)return;fired=true;cb();};
+    try{
+      if(!('speechSynthesis' in window)) throw 0;
+      const u=new SpeechSynthesisUtterance(text);u.lang=lang;u.rate=lang==='en-US'?.8:.95;u.pitch=1.1;
+      const v=pickVoice(lang);if(v)u.voice=v;
+      u.onend=fin;u.onerror=fin;speechSynthesis.speak(u);
+    }catch(e){}
+    setTimeout(fin,1500+text.length*110); // segurança caso a voz não avise o fim
   }
-  function closeQuiz(){$('veil').hidden=true;quizJar=null;}
-  function answerQuiz(w,row){
-    if(quizDone||!quizJar) return;
-    if(w===quizJar.en){
-      quizDone=true;row.classList.add('right');chime();
-      $('qMsg').textContent='Isso! '+quizJar.name+' é '+w+'!';
-      $('qMsg').style.color='var(--good)';
-      en(w,{interrupt:true});
-      const j=quizJar,el=quizEl;
-      setTimeout(()=>{closeQuiz();
+  function speakSeq(items,done){
+    const tok=++seqTok;try{speechSynthesis.cancel()}catch(e){}
+    let i=0;
+    const next=()=>{if(tok!==seqTok)return;if(i>=items.length){done&&done();return;}const [t,l,pause]=items[i++];
+      sayCb(t,l,()=>setTimeout(next,pause||120));};
+    next();
+  }
+  const stopSpeech=()=>{seqTok++;try{speechSynthesis.cancel()}catch(e){}};
+  let Q=null;
+  function openQuiz(j,el){
+    const others=shuffle(Array.from(new Set(POOL.concat(mine.map(m=>m.en))))
+      .filter(w=>w.toLowerCase()!==j.en.toLowerCase()&&!/\d$/.test(w))).slice(0,2);
+    Q={jar:j,el:el,cands:shuffle([j.en].concat(others)),idx:0,busy:false};
+    $('qName').textContent=j.name;
+    $('qBlob').style.setProperty('--c',hex(rgbOf(j.p)));
+    $('veil').hidden=false;
+    ask(true);
+  }
+  function renderQ(){
+    const dots=$('qDots').children;
+    for(let i=0;i<3;i++){dots[i].className=i<Q.idx?'done':i===Q.idx?'now':'';}
+    $('qWord').textContent=Q.cands[Q.idx]+'?';
+    $('qYes').disabled=$('qNo').disabled=Q.busy;
+  }
+  function ask(withName){
+    if(!Q)return;renderQ();
+    const w=Q.cands[Q.idx];
+    const items=[];
+    if(withName) items.push([Q.jar.name+'.','pt-BR',250]);
+    items.push(['Em inglês, é assim?','pt-BR',150],[w,'en-US',300],['Sim, ou não?','pt-BR']);
+    speakSeq(items);
+  }
+  function nudge(btn){btn.classList.remove('shake');void btn.offsetWidth;btn.classList.add('shake');}
+  function answer(yes){
+    if(!Q||Q.busy)return;
+    const w=Q.cands[Q.idx],right=w===Q.jar.en;
+    if(yes&&right){ // acertou!
+      Q.busy=true;renderQ();chime();
+      const dots=$('qDots').children;for(let i=0;i<3;i++)dots[i].className=i<=Q.idx?'done':'';
+      const b=$('qBlob');b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop');
+      const j=Q.jar,el=Q.el;
+      speakSeq([['Isso! Muito bem!','pt-BR',200],[j.name+', em inglês, é','pt-BR',120],[j.en,'en-US',300]],()=>{
+        closeQuiz();
         flyDrop(el.querySelector('.pot'),hex(rgbOf(j.p)),()=>{
           drops.push(j.id);plop();renderBowl(true);
-          setTimeout(()=>en(currentName.en),250);
+          setTimeout(()=>speakSeq([['No pote ficou','pt-BR',120],[currentName.en,'en-US']]),300);
         });
-      },900);
-    }else{
-      row.classList.remove('wrong');void row.offsetWidth;row.classList.add('wrong');buzz();
-      $('qMsg').textContent='Ops! Tente de novo.';$('qMsg').style.color='var(--bad)';
-      pt('Ops! Tente de novo.',{interrupt:true});
+      });
+    }else if(!yes&&!right){ // acertou que não é: próxima
+      tone([[700,0,.15,.15],[900,.08,.18,.15]]);
+      Q.busy=true;renderQ();
+      speakSeq([['Isso! Não é','pt-BR',100],[w,'en-US',350]],()=>{Q.idx++;Q.busy=false;ask(false);});
+    }else if(yes&&!right){ // disse sim para a errada: mostra e vai para a próxima
+      buzz();nudge($('qYes'));Q.busy=true;renderQ();
+      speakSeq([['Hum, não é','pt-BR',100],[w,'en-US',350],['Escuta outra.','pt-BR',200]],()=>{Q.idx++;Q.busy=false;ask(false);});
+    }else{ // disse não para a certa: pergunta de novo
+      buzz();nudge($('qNo'));Q.busy=true;renderQ();
+      speakSeq([['Ops! Essa é a certa!','pt-BR',250]],()=>{Q.busy=false;ask(false);});
     }
   }
+  function closeQuiz(){stopSpeech();$('veil').hidden=true;Q=null;}
+  $('qYes').addEventListener('click',()=>answer(true));
+  $('qNo').addEventListener('click',()=>answer(false));
+  $('qSwatch').addEventListener('click',()=>{if(Q&&!Q.busy)ask(true);});
   $('qClose').addEventListener('click',closeQuiz);
-  $('veil').addEventListener('click',e=>{if(e.target===$('veil'))closeQuiz();});
 
   // ---------- Ações ----------
   function onJar(j,el){
