@@ -1,0 +1,324 @@
+<title>Cadê a Banana?</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@600;800&display=swap">
+<style>
+/* Layout: one screen — question bubble on top, 2x2 giant tiles, hint bulbs at the bottom. Deliberate single bright theme (toy look). */
+:root {
+  --sky: #CFEAF2;
+  --sky-deep: #A9D6E5;
+  --tile: #FFFFFF;
+  --ink: #1F3347;
+  --ink-soft: #4F6578;
+  --tomato: #FF6B3D;
+  --sun: #FFC83A;
+  --leaf: #2FB57A;
+  --font-display: "Baloo 2", "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: var(--sky);
+  color: var(--ink);
+  font-family: var(--font-body);
+  margin: 0;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.app {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  max-width: 720px;
+  margin: 0 auto;
+}
+.top { display: flex; align-items: center; gap: 8px; }
+.cats { display: flex; flex-wrap: wrap; gap: 6px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; padding: 2px; }
+.cats::-webkit-scrollbar { display: none; }
+.cat {
+  flex: none; border: 0; border-radius: 999px; padding: 6px 12px;
+  background: var(--sky-deep); color: var(--ink); font: 800 15px var(--font-body);
+  cursor: pointer;
+}
+.cat[aria-pressed="true"] { background: var(--ink); color: var(--tile); }
+.stars {
+  flex: none; font: 800 20px var(--font-display); background: var(--tile);
+  border-radius: 999px; padding: 2px 12px; font-variant-numeric: tabular-nums;
+}
+.bubble {
+  background: var(--tile); border-radius: 28px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px; min-height: 64px;
+  box-shadow: 0 4px 0 var(--sky-deep);
+}
+.bubble-text { flex: 1; min-width: 0; }
+.question { font: 800 clamp(26px, 7vw, 40px)/1.1 var(--font-display); margin: 0; text-wrap: balance; }
+.question b { color: var(--tomato); }
+.say { font: 600 clamp(16px, 4.2vw, 20px)/1.25 var(--font-body); color: var(--ink-soft); margin: 2px 0 0; min-height: 1.25em; }
+.speak {
+  flex: none; width: 56px; height: 56px; border-radius: 50%; border: 0;
+  background: var(--sun); font-size: 28px; cursor: pointer;
+}
+.grid {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 14px;
+}
+.tile {
+  border: 0; border-radius: 32px; background: var(--tile); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: min(22vw, 17vh, 150px); line-height: 1;
+  box-shadow: 0 8px 0 var(--sky-deep);
+  transition: transform .15s ease, opacity .4s ease, box-shadow .15s ease;
+  min-height: 0; min-width: 0;
+}
+.tile:active { transform: translateY(4px); box-shadow: 0 4px 0 var(--sky-deep); }
+.tile.gone { opacity: 0; transform: scale(.4); pointer-events: none; }
+.tile.wrong { animation: shake .45s ease; }
+.tile.right { background: var(--leaf); box-shadow: 0 8px 0 #1F8A5B; animation: hop .7s ease; }
+.tile:focus-visible, .cat:focus-visible, .speak:focus-visible, .hint:focus-visible, .start:focus-visible { outline: 4px solid var(--tomato); outline-offset: 3px; }
+.bottom { display: flex; justify-content: center; gap: 16px; }
+.hint {
+  border: 0; border-radius: 999px; padding: 8px 22px 8px 14px; cursor: pointer;
+  background: var(--sun); color: var(--ink); font: 800 20px var(--font-display);
+  display: flex; align-items: center; gap: 6px; box-shadow: 0 5px 0 #D9A21C;
+}
+.hint span { font-size: 30px; }
+.hint:disabled { background: var(--sky-deep); box-shadow: none; opacity: .55; cursor: default; }
+.overlay {
+  position: fixed; inset: 0; background: var(--sky);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 24px; text-align: center; z-index: 5;
+}
+.overlay .big { font-size: 96px; animation: hop 1.6s ease infinite; }
+.overlay h1 { font: 800 clamp(40px, 11vw, 64px)/1 var(--font-display); margin: 0; }
+.overlay p { font-size: 18px; max-width: 34ch; margin: 0; color: var(--ink-soft); line-height: 1.4; }
+.start {
+  border: 0; border-radius: 999px; padding: 14px 44px; cursor: pointer;
+  background: var(--tomato); color: var(--tile); font: 800 30px var(--font-display);
+  box-shadow: 0 7px 0 #C9471F;
+}
+.confetti { position: fixed; pointer-events: none; font-size: 34px; z-index: 4; animation: fly 1.2s ease-out forwards; }
+@keyframes shake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-12px) } 40% { transform: translateX(12px) } 60% { transform: translateX(-8px) } 80% { transform: translateX(8px) } }
+@keyframes hop { 0%,100% { transform: scale(1) } 30% { transform: scale(1.12) rotate(-4deg) } 60% { transform: scale(.96) rotate(3deg) } }
+@keyframes fly { from { transform: translate(0,0) scale(.6); opacity: 1 } to { transform: translate(var(--dx), var(--dy)) scale(1.2) rotate(var(--rot)); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="cats" id="cats" role="group" aria-label="Escolher tema"></div>
+    <div class="stars" id="stars" aria-label="Acertos">⭐ 0</div>
+  </div>
+  <div class="bubble">
+    <div class="bubble-text">
+      <p class="question" id="question">Cadê a <b>banana</b>?</p>
+      <p class="say" id="say">Toque na figura certa.</p>
+    </div>
+    <button class="speak" id="speak" aria-label="Falar de novo">🔊</button>
+  </div>
+  <div class="grid" id="grid">
+    <button class="tile">🍎</button><button class="tile">🍌</button><button class="tile">🍇</button><button class="tile">🍓</button>
+  </div>
+  <div class="bottom">
+    <button class="hint" id="hint1"><span>💡</span>Dica</button>
+    <button class="hint" id="hint2"><span>💡</span>Dica</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="big">🍌</div>
+  <h1>Cadê a Banana?</h1>
+  <p>Quatro figuras na tela. Ouça a pergunta e toque na certa. Tem duas lâmpadas de dica em cada rodada.</p>
+  <button class="start" id="start">Jogar</button>
+</div>
+
+<script>
+const CATS = {
+  frutas: { label: "🍎 Frutas", items: [
+    ["🍌","a","banana",["É amarela e o macaco adora!","É comprida e a gente tira a casca."]],
+    ["🍎","a","maçã",["É vermelha e redondinha.","Faz crec crec quando morde!"]],
+    ["🍇","a","uva",["São bolinhas roxas juntinhas.","Vem num cacho cheio de bolinhas."]],
+    ["🍓","o","morango",["É vermelho com pontinhos.","Tem um chapeuzinho verde em cima."]],
+    ["🍉","a","melancia",["É verde por fora e vermelha por dentro.","É grandona e cheia de água!"]],
+    ["🍍","o","abacaxi",["Tem uma coroa de folhas!","É amarelo e espinhudo por fora."]],
+    ["🍊","a","laranja",["Tem a cor do nome dela!","A gente faz suco com ela."]],
+    ["🍐","a","pera",["É verdinha e parece uma gota.","É fininha em cima e gordinha embaixo."]],
+    ["🍒","a","cereja",["São duas bolinhas vermelhas.","Ficam penduradas num cabinho."]],
+    ["🍋","o","limão",["É azedo! Faz careta!","É amarelinho e a gente faz limonada."]],
+  ]},
+  animais: { label: "🐶 Bichos", items: [
+    ["🐶","o","cachorro",["Faz au au!","Abana o rabo quando está feliz."]],
+    ["🐱","o","gato",["Faz miau!","Gosta de leite e de dormir."]],
+    ["🐮","a","vaca",["Faz muuu!","Dá leite pra gente."]],
+    ["🐷","o","porco",["Faz oinc oinc!","É rosinha e gosta de lama."]],
+    ["🦁","o","leão",["Faz roar! É o rei da floresta.","Tem uma juba bem grande."]],
+    ["🐵","o","macaco",["Faz uh uh ah ah!","Adora comer banana."]],
+    ["🐔","a","galinha",["Faz có có có!","Bota ovo."]],
+    ["🐸","o","sapo",["Faz croac!","É verde e pula muito."]],
+    ["🐰","o","coelho",["Tem orelhas compridas.","Pula e come cenoura."]],
+    ["🐘","o","elefante",["Tem uma tromba comprida.","É grandão e cinza."]],
+    ["🐟","o","peixe",["Mora na água.","Nada, nada, nada!"]],
+    ["🦆","o","pato",["Faz quá quá!","Nada no lago."]],
+  ]},
+  transportes: { label: "🚗 Transportes", items: [
+    ["🚗","o","carro",["Faz bi bi!","Tem quatro rodas e leva a família."]],
+    ["🚌","o","ônibus",["É comprido e leva muita gente.","Para no ponto pra gente subir."]],
+    ["✈️","o","avião",["Voa lá no céu bem alto.","Tem asas, mas não é passarinho."]],
+    ["⛵","o","barco",["Anda na água.","Tem uma vela pro vento empurrar."]],
+    ["🚂","o","trem",["Faz piuí piuí!","Anda nos trilhos."]],
+    ["🚲","a","bicicleta",["Tem duas rodas e pedal.","A gente pedala pra ela andar."]],
+    ["🚁","o","helicóptero",["Voa e tem uma hélice que gira.","Faz tuc tuc tuc lá no céu."]],
+    ["🚀","o","foguete",["Vai até a lua!","Sobe bem rápido pro espaço."]],
+    ["🚒","o","caminhão de bombeiro",["É vermelho e apaga o fogo.","Faz uóóó uóóó!"]],
+    ["🚑","a","ambulância",["Leva quem está dodói pro hospital.","É branca e faz uiu uiu!"]],
+    ["🏍️","a","moto",["Tem duas rodas e faz vrum vrum!","Precisa de capacete pra andar."]],
+    ["🚜","o","trator",["Trabalha na fazenda.","Tem rodas grandonas atrás."]],
+  ]},
+  cores: { label: "🎨 Cores", items: [
+    ["🔴","o","vermelho",["É a cor do morango.","É a cor do carro de bombeiro."]],
+    ["🔵","o","azul",["É a cor do céu.","É a cor do mar."]],
+    ["🟡","o","amarelo",["É a cor do sol.","É a cor da banana."]],
+    ["🟢","o","verde",["É a cor da folha.","É a cor do sapo."]],
+    ["🟠","o","laranja",["É a cor da cenoura.","É a cor da laranja."]],
+    ["🟣","o","roxo",["É a cor da uva.","É a cor da berinjela."]],
+    ["🟤","o","marrom",["É a cor do chocolate.","É a cor do tronco da árvore."]],
+    ["⚫","o","preto",["É a cor da noite.","É a cor do pneu."]],
+    ["⚪","o","branco",["É a cor do leite.","É a cor da nuvem."]],
+  ]},
+};
+const ORDER = ["misturado","frutas","animais","transportes","cores"];
+const PRAISE = ["Muito bem!","Isso mesmo!","Parabéns!","Que esperta!","Acertou!","Uhuu!"];
+
+let cat = "misturado", round = null, stars = 0, hintsUsed = 0, locked = false, lastAnswer = null;
+const $ = id => document.getElementById(id);
+
+// Voz
+let voice = null;
+function pickVoice() {
+  try {
+    const vs = speechSynthesis.getVoices();
+    voice = vs.find(v => v.lang === "pt-BR") || vs.find(v => v.lang && v.lang.startsWith("pt")) || null;
+  } catch (e) {}
+}
+try { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; } catch (e) {}
+function speak(text) {
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "pt-BR"; u.rate = 0.9; u.pitch = 1.2;
+    if (voice) u.voice = voice;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const cadê = it => `Cadê ${it[1]} ${it[2]}?`;
+const esse = it => `${it[1] === "a" ? "Essa é a" : "Esse é o"} ${it[2]}.`;
+
+function renderCats() {
+  $("cats").innerHTML = "";
+  for (const key of ORDER) {
+    const b = document.createElement("button");
+    b.className = "cat";
+    b.textContent = key === "misturado" ? "🎲 Tudo" : CATS[key].label;
+    b.setAttribute("aria-pressed", String(key === cat));
+    b.onclick = () => { cat = key; renderCats(); newRound(); };
+    $("cats").appendChild(b);
+  }
+}
+
+function newRound() {
+  const key = cat === "misturado" ? shuffle(Object.keys(CATS))[0] : cat;
+  let pool = CATS[key].items.filter(it => it[2] !== lastAnswer);
+  const four = shuffle(pool).slice(0, 4);
+  const answer = four[Math.random() * 4 | 0];
+  lastAnswer = answer[2];
+  round = { four, answer, gone: new Set() };
+  hintsUsed = 0; locked = false;
+  $("question").innerHTML = `Cadê ${answer[1]} <b>${answer[2]}</b>?`;
+  $("say").textContent = "Toque na figura certa.";
+  const grid = $("grid"); grid.innerHTML = "";
+  four.forEach((it, i) => {
+    const b = document.createElement("button");
+    b.className = "tile";
+    b.textContent = it[0];
+    b.setAttribute("aria-label", it[2]);
+    b.onclick = () => choose(i, b);
+    grid.appendChild(b);
+  });
+  updateHints();
+  speak(cadê(answer));
+}
+
+function choose(i, el) {
+  if (locked || round.gone.has(i)) return;
+  const it = round.four[i];
+  if (it === round.answer) {
+    locked = true;
+    el.classList.add("right");
+    stars++; $("stars").textContent = "⭐ " + stars;
+    const p = PRAISE[Math.random() * PRAISE.length | 0];
+    $("say").textContent = `${p} ${esse(it)}`;
+    speak(`${p} ${esse(it)}`);
+    burst(el);
+    setTimeout(newRound, 2600);
+  } else {
+    el.classList.remove("wrong"); void el.offsetWidth; el.classList.add("wrong");
+    const msg = `${esse(it)} ${cadê(round.answer)}`;
+    $("say").textContent = msg;
+    speak(msg);
+  }
+}
+
+function useHint() {
+  if (locked || hintsUsed >= 2) return;
+  const wrong = round.four.map((it, i) => i).filter(i => round.four[i] !== round.answer && !round.gone.has(i));
+  const kill = wrong[Math.random() * wrong.length | 0];
+  round.gone.add(kill);
+  $("grid").children[kill].classList.add("gone");
+  const phrase = round.answer[3][hintsUsed];
+  hintsUsed++;
+  $("say").textContent = "💡 " + phrase;
+  speak(phrase);
+  updateHints();
+}
+function updateHints() {
+  $("hint1").disabled = hintsUsed >= 1;
+  $("hint2").disabled = hintsUsed >= 2;
+}
+
+function burst(el) {
+  const r = el.getBoundingClientRect();
+  const bits = ["⭐","🎉","✨","💛","🌟"];
+  for (let k = 0; k < 14; k++) {
+    const s = document.createElement("span");
+    s.className = "confetti";
+    s.textContent = bits[k % bits.length];
+    s.style.left = (r.left + r.width / 2 - 17) + "px";
+    s.style.top = (r.top + r.height / 2 - 17) + "px";
+    const ang = Math.random() * Math.PI * 2, dist = 120 + Math.random() * 160;
+    s.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+    s.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+    s.style.setProperty("--rot", (Math.random() * 720 - 360) + "deg");
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 1300);
+  }
+}
+
+$("hint1").onclick = useHint;
+$("hint2").onclick = useHint;
+$("speak").onclick = () => { if (round) speak(cadê(round.answer)); };
+$("start").onclick = () => { $("overlay").hidden = true; newRound(); };
+renderCats();
+</script>
