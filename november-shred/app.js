@@ -238,7 +238,7 @@
   async function keepAwake(on) {
     try {
       if (on && "wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => (wakeLock = null)); }
-      if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+      if (!on && wakeLock && !F.open) { await wakeLock.release(); wakeLock = null; }
     } catch (e) {}
   }
 
@@ -361,10 +361,10 @@
     const h = decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "hoje";
     const cut = h.search(/[-/]/);
     const name = cut < 0 ? h : h.slice(0, cut), arg = cut < 0 ? "" : h.slice(cut + 1);
-    timerStop(true);
-    $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name || (name === "dia" && a.dataset.tab === "calendario") || (name === "exercicio" && a.dataset.tab === "exercicios")));
+    timerStop(true); closeFocus();
+    $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name || ((name === "dia" || name === "foco") && a.dataset.tab === "calendario") || (name === "exercicio" && a.dataset.tab === "exercicios")));
     const v = $("#view");
-    if (name === "dia") { v.innerHTML = viewDay(+arg); bindDay(+arg); }
+    if (name === "dia" || name === "foco") { v.innerHTML = viewDay(+arg); bindDay(+arg); if (name === "foco" && WORKOUTS[+arg - 1]) openFocus(+arg); }
     else if (name === "calendario") v.innerHTML = viewCalendar();
     else if (name === "progresso") { v.innerHTML = viewProgress(); bindProgress(); }
     else if (name === "exercicios") { v.innerHTML = viewExercises(); bindExercises(); }
@@ -410,6 +410,7 @@
           <span class="btn primary block">${log?.done ? "Ver / editar registro" : "Começar treino →"}</span>
         </div>
       </a>
+      <a class="btn ghost block" href="#foco-${n}" style="margin-bottom:8px">🎯 Treinar em modo foco</a>
       ${next && next.day !== n ? `<a class="btn ghost block" href="#dia-${next.day}">Próximo pendente: Dia ${next.day} · ${esc(next.name)}</a>` : ""}
       ${statsBlock()}
       <div class="section"><h3>Antes de começar</h3></div>
@@ -597,6 +598,7 @@
         <p class="small muted" style="margin:6px 0 10px">${esc(description(w, t))}</p>
         <div class="seg" id="levelSeg">${Object.entries(LEVELS).map(([k, v]) => `<button data-level="${k}" class="${k === level ? "on" : ""}">${v}</button>`).join("")}</div>
         ${restSelect(w)}
+        <button type="button" class="btn primary block" id="focusBtn" style="margin-top:12px">🎯 Treinar em modo foco</button>
       </div>
 
       ${warmupDay(log)}
@@ -806,9 +808,9 @@
         for (let r = 1; r <= tt.rounds; r++) {
           w.ex.forEach(([id], i) => {
             const nextId = w.ex[i + 1]?.[0];
-            segs.push({ endsRound: i === w.ex.length - 1 ? r : 0, phase: "work", secs: w.work, label: exInfo(id).pt, sub: `Round ${r}/${tt.rounds} · ${i + 1}/${w.ex.length}` + (nextId ? ` · depois: ${exInfo(nextId).pt}` : r < tt.rounds ? " · depois: descanso" : " · último!") });
+            segs.push({ exIdx: i, endsRound: i === w.ex.length - 1 ? r : 0, phase: "work", secs: w.work, label: exInfo(id).pt, sub: `Round ${r}/${tt.rounds} · ${i + 1}/${w.ex.length}` + (nextId ? ` · depois: ${exInfo(nextId).pt}` : r < tt.rounds ? " · depois: descanso" : " · último!") });
           });
-          if (r < tt.rounds) segs.push({ phase: "rest", secs: restOf(w), label: "Descanso", sub: `Próximo: round ${r + 1} · ${exInfo(w.ex[0][0]).pt}` });
+          if (r < tt.rounds) segs.push({ exIdx: 0, phase: "rest", secs: restOf(w), label: "Descanso", sub: `Próximo: round ${r + 1} · ${exInfo(w.ex[0][0]).pt}` });
         }
         timerLoad(segs, "interval", () => { markEnd(); toast("Treino concluído! Registre abaixo."); $("#logCard")?.scrollIntoView({ behavior: "smooth" }); });
       }
@@ -827,6 +829,8 @@
       const f = $("#fDur"); if (f) f.value = l.duration;
       paintTimes(); renderDiary(n);
     }
+
+    $("#focusBtn").onclick = () => openFocus(n);
 
     // Seletor de descanso
     $("#restTest").onclick = () => { unlockAudio(); setTimeout(alarm, 150); };
@@ -910,6 +914,207 @@
     if (saveBtn) saveBtn.onclick = () => { collect(); save(); toast("Salvo"); };
     const undoBtn = $("#undoBtn");
     if (undoBtn) undoBtn.onclick = () => { log().done = false; save(); route(); };
+  }
+
+
+  // ---------- Modo foco ----------
+  const F = { open: false, n: 0, idx: 0, amrapIdx: 0, iv: null, vidFor: null };
+  function focusItems(n) {
+    const w = WORKOUTS[n - 1];
+    return [
+      ...WARMUP.map(([id, note], k) => ({ kind: "warm", k, id, note, sub: note })),
+      ...w.ex.map(([id, note, reps], i) => ({ kind: "ex", i, id, note, reps })),
+    ];
+  }
+  function fxSetsDone(n, i) { const l = getLog(n) || {}; return ((l.sets && l.sets[i]) || []); }
+  function fxItemDone(n, it) {
+    const w = WORKOUTS[n - 1], l = getLog(n) || {};
+    if (it.kind === "warm") return !!(l.warm && l.warm[it.k]);
+    if (w.type === "sets") { const t = target(w, l.level || S.settings.level), d = fxSetsDone(n, it.i); return Array.from({ length: t.sets }, (_, s) => !!d[s]).every(Boolean); }
+    return false;
+  }
+  function fxSub(n, it) {
+    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    if (it.kind === "warm") return it.note;
+    if (w.type === "sets") return `${t.sets} × ${t.reps}${it.note ? " · " + it.note : ""}`;
+    if (w.type === "amrap") return `x${it.reps + t.plus}${it.note ? " · " + it.note : ""}`;
+    return `${w.work}s${it.note ? " · " + it.note : ""}`;
+  }
+  function openFocus(n) {
+    const w = WORKOUTS[n - 1]; if (!w) return;
+    closeFocus();
+    Object.assign(F, { open: true, n, amrapIdx: 0, vidFor: null });
+    const items = focusItems(n);
+    const first = items.findIndex((it) => !fxItemDone(n, it));
+    F.idx = first < 0 ? items.length - 1 : first;
+    const el = document.createElement("div");
+    el.id = "focus"; el.className = "focus"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Modo foco");
+    el.innerHTML = `
+      <div class="fx-top">
+        <button type="button" class="fx-icon" id="fxClose" aria-label="Sair do modo foco">✕</button>
+        <div class="fx-title">Dia ${n} · ${esc(w.name)}</div>
+        <div class="fx-count" id="fxCount"></div>
+      </div>
+      <div class="fx-body">
+        <div class="fx-hero">
+          <button type="button" class="fx-ring" id="fxRing" aria-label="Pausar ou continuar o timer">
+            <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" id="fxArc" cx="60" cy="60" r="52"/></svg>
+            <span class="fx-ringin"><span id="fxBig"></span><span id="fxSmall"></span></span>
+          </button>
+          <div class="fx-info">
+            <div class="fx-phase" id="fxPhase"></div>
+            <div class="fx-name" id="fxName"></div>
+            <div class="fx-sub" id="fxSub"></div>
+            <div class="fx-target" id="fxTarget"></div>
+          </div>
+        </div>
+        <div class="fx-actions">
+          <button type="button" class="btn fx-nav" id="fxPrev" aria-label="Exercício anterior">‹</button>
+          <button type="button" class="btn primary fx-main" id="fxMain"></button>
+          <button type="button" class="btn fx-nav" id="fxNext" aria-label="Próximo exercício">›</button>
+        </div>
+        <div class="fx-how">
+          <div class="fx-howhead"><b>Como fazer</b><span id="fxVid"></span></div>
+          <div id="fxPlayer"></div>
+          <ol id="fxHow"></ol>
+          <p class="fx-warn" id="fxWarn"></p>
+        </div>
+        <div class="fx-list" id="fxList"></div>
+      </div>`;
+    document.body.appendChild(el);
+    document.documentElement.classList.add("fx-lock");
+    $("#fxClose").onclick = closeFocus;
+    $("#fxPrev").onclick = () => { F.idx = Math.max(0, F.idx - 1); fxRender(true); };
+    $("#fxNext").onclick = () => { F.idx = Math.min(focusItems(F.n).length - 1, F.idx + 1); fxRender(true); };
+    $("#fxMain").onclick = fxMain;
+    $("#fxRing").onclick = () => {
+      if (R.key) { restToggle(); return; }
+      const box = $("#timerBox [data-t=play]"); if (box && (T.running || T.remain < (T.segs[T.i]?.secs || 0) * 1000)) box.click();
+    };
+    $("#fxList").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) { F.idx = +b.dataset.fx; fxRender(true); } };
+    keepAwake(true);
+    fxRender(true);
+    F.iv = setInterval(() => fxRender(false), 200);
+  }
+  function closeFocus() {
+    if (!F.open) return;
+    clearInterval(F.iv); F.open = false;
+    $("#focus")?.remove();
+    document.documentElement.classList.remove("fx-lock");
+    if (!T.running && !R.running) keepAwake(false);
+  }
+  function fxTimerStarted() { const seg = T.segs[T.i]; return !!seg && (T.running || T.remain < seg.secs * 1000); }
+  function fxMain() {
+    const n = F.n, w = WORKOUTS[n - 1], items = focusItems(n), it = items[F.idx], l = getLog(n) || {};
+    if (!it) return;
+    const next = () => { F.idx = Math.min(items.length - 1, F.idx + 1); };
+    if (it.kind === "warm") {
+      if (!fxItemDone(n, it)) $(`[data-warm="${it.k}"]`)?.click();
+      next();
+    } else if (w.type === "sets") {
+      const t = target(w, l.level || S.settings.level), d = fxSetsDone(n, it.i);
+      const s = Array.from({ length: t.sets }, (_, x) => x).find((x) => !d[x]);
+      if (s == null) { next(); }
+      else {
+        $(`[data-set="${it.i}:${s}"]`)?.click();
+        if (s === t.sets - 1 && it.i < w.ex.length - 1) next();
+      }
+    } else if (w.type === "interval") {
+      $("#timerBox [data-t=play]")?.click();
+    } else {
+      if (!fxTimerStarted()) { restStop(); $("#timerBox [data-t=play]")?.click(); F.amrapIdx = 0; }
+      else {
+        F.amrapIdx++;
+        if (F.amrapIdx >= w.ex.length) { F.amrapIdx = 0; $('[data-round="1"]')?.click(); }
+      }
+      F.idx = WARMUP.length + F.amrapIdx;
+    }
+    fxRender(true);
+  }
+  function fxRender(full) {
+    if (!F.open || !$("#focus")) return;
+    const n = F.n, w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level), items = focusItems(n);
+    // no intervalado/AMRAP em andamento, o destaque segue o timer
+    if (w.type === "interval" && fxTimerStarted()) { const seg = T.segs[T.i]; if (seg && seg.exIdx != null) { const ni = WARMUP.length + seg.exIdx; if (ni !== F.idx) { F.idx = ni; full = true; } } }
+    const it = items[F.idx];
+    // Anel
+    const C = 2 * Math.PI * 52;
+    let big = "", small = "", frac = 1, phase = "", cls = "";
+    if (R.key) {
+      const rem = R.running ? Math.max(0, R.endAt - Date.now()) : R.remain;
+      big = rem > 0 ? String(Math.ceil(rem / 1000)) : "✓"; small = rem > 0 ? (R.running ? "descanso" : "pausado") : "bora!";
+      frac = R.secs ? rem / (R.secs * 1000) : 0; phase = rem > 0 ? "Descanso" : "Próximo!"; cls = "rest";
+    } else if (fxTimerStarted() || (T.segs.length && T.remain === 0)) {
+      const seg = T.segs[T.i] || { secs: 1, phase: "" };
+      const rem = T.running ? Math.max(0, T.endAt - Date.now()) : T.remain;
+      big = rem > 0 ? mmss(rem) : "✓"; small = T.running ? "" : rem > 0 ? "pausado" : "fim";
+      frac = rem / (seg.secs * 1000); phase = rem <= 0 ? "Finalizado! 💪" : { prep: "Prepare-se", work: "Vai!", rest: "Descanso" }[seg.phase] || ""; cls = seg.phase === "rest" ? "rest" : "work";
+    } else if (it) {
+      if (it.kind === "warm") { big = (it.note.match(/x\d+/) || ["✓"])[0]; small = "aquecimento"; }
+      else if (w.type === "sets") { big = String(t.reps); small = "reps"; }
+      else if (w.type === "amrap") { big = `${w.amrap}'`; small = "AMRAP"; }
+      else { big = `${w.work}s`; small = `× ${t.rounds} rounds`; }
+      frac = 1; phase = it.kind === "warm" ? "Aquecimento" : "Pronto"; cls = "idle";
+    }
+    $("#fxBig").textContent = big; $("#fxSmall").textContent = small;
+    const arc = $("#fxArc"); arc.style.strokeDasharray = C; arc.style.strokeDashoffset = C * (1 - Math.max(0, Math.min(1, frac)));
+    $("#fxRing").className = "fx-ring " + cls;
+    $("#fxPhase").textContent = phase;
+    // Botão principal
+    let main = "";
+    if (!it) main = "";
+    else if (it.kind === "warm") main = fxItemDone(n, it) ? "Próximo ›" : "✓ Feito";
+    else if (w.type === "sets") {
+      const d = fxSetsDone(n, it.i), s = Array.from({ length: t.sets }, (_, x) => x).find((x) => !d[x]);
+      main = s == null ? (it.i === w.ex.length - 1 ? "✓ Treino concluído" : "Próximo exercício ›") : `✓ Série ${s + 1} de ${t.sets} feita`;
+    } else if (w.type === "interval") main = T.running ? "⏸ Pausar" : fxTimerStarted() ? "▶ Continuar" : (T.remain === 0 && T.segs.length ? "✓ Concluído" : `▶ Iniciar ${t.rounds} rounds`);
+    else main = fxTimerStarted() ? (F.amrapIdx === w.ex.length - 1 ? "✓ Feito · fecha o round" : "✓ Feito · próximo") : `▶ Iniciar AMRAP ${w.amrap} min`;
+    const mb = $("#fxMain"); if (mb.textContent !== main) mb.textContent = main;
+    // Contador
+    const doneN = items.filter((x) => fxItemDone(n, x)).length;
+    $("#fxCount").textContent = w.type === "amrap" ? `${l.amrapRounds || 0} rounds` : `${doneN}/${items.length}`;
+    if (!full) {
+      // atualiza só o alvo (séries/rounds) e os checks da lista
+      $("#fxTarget").innerHTML = fxTargetHtml(n, it);
+      $$("#fxList [data-fx]").forEach((b) => { const x = items[+b.dataset.fx]; b.classList.toggle("done", fxItemDone(n, x)); b.classList.toggle("on", +b.dataset.fx === F.idx); });
+      return;
+    }
+    if (!it) return;
+    const e = exInfo(it.id), how = HOWTO[it.id] || [];
+    $("#fxName").textContent = e.pt;
+    $("#fxSub").textContent = `${e.en}${it.note ? " · " + it.note : ""}`;
+    $("#fxTarget").innerHTML = fxTargetHtml(n, it);
+    const steps = how.filter((x) => !/^Atenção:/.test(x)), warn = how.find((x) => /^Atenção:/.test(x));
+    $("#fxHow").innerHTML = steps.map((x) => `<li>${esc(x)}</li>`).join("");
+    $("#fxWarn").innerHTML = warn ? `⚠️ <b>Atenção:</b> ${esc(warn.replace(/^Atenção:\s*/, ""))}` : "";
+    const vid = ytId(S.videos[it.id]);
+    $("#fxVid").innerHTML = vid
+      ? `<a class="vbtn pin" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ Meu vídeo</a>`
+      : `<a class="vbtn alt" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Buscar vídeo</a>`;
+    if (F.vidFor !== it.id) {
+      F.vidFor = it.id;
+      $("#fxPlayer").innerHTML = CAN_EMBED && vid ? `<div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&mute=1&loop=1&playlist=${vid}" title="${esc(e.pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>` : "";
+    }
+    $("#fxList").innerHTML = items.map((x, j) => {
+      const xi = exInfo(x.id), lab = x.kind === "warm" ? `A${x.k + 1}` : String(x.i + 1).padStart(2, "0");
+      const head = j === 0 ? `<div class="fx-sec">Aquecimento</div>` : j === WARMUP.length ? `<div class="fx-sec">Treino</div>` : "";
+      return `${head}<button type="button" class="fx-item ${j === F.idx ? "on" : ""} ${fxItemDone(n, x) ? "done" : ""}" data-fx="${j}">
+        <span class="fx-num">${lab}</span><span class="fx-txt"><b>${esc(xi.pt)}</b><small>${esc(fxSub(n, x))}</small></span></button>`;
+    }).join("");
+    if (F.lastIdx !== F.idx) { F.lastIdx = F.idx; const body = $("#focus .fx-body"); if (body) body.scrollTop = 0; }
+  }
+  function fxTargetHtml(n, it) {
+    if (!it) return "";
+    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    if (it.kind === "warm") return fxItemDone(n, it) ? `<span class="lime">✓ Feito</span>` : "Toque em ✓ Feito ao terminar";
+    if (w.type === "sets") {
+      const d = fxSetsDone(n, it.i);
+      return `${t.reps} reps · ` + Array.from({ length: t.sets }, (_, s) => `<span class="fx-dot ${d[s] ? "on" : ""}">${s + 1}</span>`).join("");
+    }
+    if (w.type === "amrap") return `x${it.reps + t.plus} reps · Round ${(l.amrapRounds || 0) + 1}`;
+    const seg = T.segs[T.i];
+    const m = seg && seg.sub ? seg.sub.match(/Round (\d+)\/(\d+)/) : null;
+    return m ? `Round ${m[1]} de ${m[2]}` : `${w.work}s · ${t.rounds} rounds`;
   }
 
   // ---------- Evolução ----------
