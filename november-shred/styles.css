@@ -355,3 +355,6 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
 .ex .log.side .restpill { width: 50px; font-size: 13px; padding: 0 2px; }
 .ex .vids { gap: 4px; }
 .ex .vids .vbtn { padding: 6px 7px; }
+
+button.fx-dot, button.fx-badge { cursor: pointer; font-family: inherit; }
+button.fx-badge { border: 0; }

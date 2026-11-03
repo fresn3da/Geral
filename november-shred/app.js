@@ -894,7 +894,11 @@
       if (l.sets[i][s]) l.setAt[i][s] = Date.now(); else delete l.setAt[i][s];
       save(); renderDiary(n);
       b.classList.toggle("on", !!l.sets[i][s]);
-      if (!l.sets[i][s]) { if (R.key === "s" + i) restStop(); return; }
+      if (!l.sets[i][s]) {
+        if (R.key === "s" + i) restStop();
+        if (i === w.ex.length - 1 && s === t().sets - 1 && l.endedAt) { delete l.endedAt; save(); paintTimes(); renderDiary(n); }
+        return;
+      }
       if (R.key && R.key[0] === "w") restStop();
       markStart();
       const lastOfLast = i === w.ex.length - 1 && s === t().sets - 1;
@@ -1020,6 +1024,14 @@
     };
     $("#fxTabs").onclick = (e) => { const b = e.target.closest("[data-sec]"); if (b) { F.sec = b.dataset.sec; fxPaintList(); } };
     $("#fxHowBtn").onclick = () => { F.howTab = F.howTab === "how" ? "video" : "how"; fxPaintHow(); };
+    // Tocar em "✓ Feito" ou numa série desfaz / refaz
+    $("#fxProgress").onclick = (e) => {
+      const u = e.target.closest("[data-undowarm]"), d = e.target.closest("[data-fxset]");
+      if (u) { $(`[data-warm="${u.dataset.undowarm}"]`)?.click(); toast("Desmarcado"); }
+      else if (d) { const wasOn = d.classList.contains("on"); $(`[data-set="${d.dataset.fxset}"]`)?.click(); if (wasOn) toast("Série desmarcada"); }
+      else return;
+      fxRender(true);
+    };
     $("#fxList").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) { F.idx = +b.dataset.fx; fxRender(true); } };
     keepAwake(true);
     fxRender(true);
@@ -1167,10 +1179,10 @@
   function fxProgressHtml(n, it) {
     if (!it) return "";
     const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
-    if (it.kind === "warm") return fxItemDone(n, it) ? `<span class="fx-badge on">✓ Feito</span>` : "";
+    if (it.kind === "warm") return fxItemDone(n, it) ? `<button type="button" class="fx-badge on" data-undowarm="${it.k}" aria-label="Desmarcar ${esc(exInfo(it.id).en)}">✓ Feito</button>` : "";
     if (w.type === "sets") {
       const d = fxSetsDone(n, it.i);
-      return Array.from({ length: t.sets }, (_, x) => `<span class="fx-dot ${d[x] ? "on" : ""}">${x + 1}</span>`).join("");
+      return Array.from({ length: t.sets }, (_, x) => `<button type="button" class="fx-dot ${d[x] ? "on" : ""}" data-fxset="${it.i}:${x}" aria-label="Série ${x + 1}${d[x] ? " (feita, toque para desmarcar)" : ""}">${x + 1}</button>`).join("");
     }
     if (w.type === "amrap") return `<span class="fx-badge">Round ${(l.amrapRounds || 0) + 1}</span>`;
     const seg = T.segs[T.i], m = seg && seg.sub ? seg.sub.match(/Round (\d+)\/(\d+)/) : null;
