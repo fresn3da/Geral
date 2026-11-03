@@ -127,16 +127,16 @@ h3 { font-size: 22px; }
 .wlist .check { margin-left: auto; color: var(--lime); font-weight: 800; }
 
 /* Exercises */
-.ex { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
-.ex > .i { grid-column: 1; }
-.ex > div:nth-child(2) { grid-column: 2 / -1; }
-.ex .log.side { grid-column: 3; grid-row: 1; flex-direction: column; align-items: flex-end; align-self: start; }
-.ex:has(.log.side) > div:nth-child(2) { grid-column: 2; }
-.ex:has(.log.side) .vidwrap { grid-column: 2 / -1; }
+/* Linha do exercício: número | conteúdo | ✓ (número e ✓ centralizados na altura) */
+.ex { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.exmain { min-width: 0; display: grid; gap: 8px; }
+.exhead { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; }
+.ex .name { color: inherit; text-decoration: none; }
+.ex .log.side { flex-direction: column; align-items: center; justify-content: center; }
 .ex:last-child { border-bottom: 0; }
-.ex .i { font-family: var(--display); font-size: 22px; color: var(--lime); font-style: italic; line-height: 1.1; }
+.ex .i { font-family: var(--display); font-size: 22px; color: var(--lime); font-style: italic; line-height: 1; text-align: center; }
 .ex .name { font-weight: 800; }
-.ex .orig { font-size: 12px; color: var(--muted); }
+.ex .orig { font-size: 13px; color: var(--muted); }
 .ex .target { color: var(--lime); font-weight: 800; }
 .ex .vids { display: flex; gap: 6px; flex-wrap: wrap; }
 .ex .vids .vbtn { padding: 6px 8px; white-space: nowrap; }
@@ -150,7 +150,7 @@ h3 { font-size: 22px; }
 .vbtn.yt { background: #ff0033; color: #fff; }
 button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
 .vbtn.ghostv { background: transparent; border: 1.5px dashed var(--line); color: var(--text); }
-.vidwrap { grid-column: 2 / -1; display: grid; gap: 8px; min-width: 0; }
+.vidwrap { display: grid; gap: 8px; min-width: 0; }
 .vidwrap .vids { grid-column: auto; }
 .player { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
 .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
@@ -181,7 +181,7 @@ button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
 .sync.bad { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
 .times { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; margin-top: 8px; padding: 10px 12px; background: var(--card-2); border-radius: 10px; }
 .restpill.go { background: var(--lime); color: var(--lime-ink); outline-color: var(--lime); }
-.ex .log { grid-column: 2 / -1; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.ex .log { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
 .scale { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; }
 .scale b { display: block; font-size: 11px; letter-spacing: 1.5px; color: var(--lime); }
@@ -344,6 +344,13 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
   .fx-howbox { padding-top: 80px; }
 }
 @media (prefers-reduced-motion: reduce) { .fx-ring .fg { transition: none; } }
+.ex .log.side { width: 58px; gap: 6px; }
+.ex .log.side .restpill { min-width: 0; width: 58px; height: 32px; padding: 0 4px; font-size: 14px; }
+.ex { grid-template-columns: 20px minmax(0, 1fr) auto; column-gap: 8px; }
+.ex .log.side { width: 50px; }
+.ex .log.side .restpill { width: 50px; font-size: 13px; padding: 0 2px; }
+.ex .vids { gap: 4px; }
+.ex .vids .vbtn { padding: 6px 7px; }
 
 </style>
 
@@ -1116,16 +1123,19 @@ const CLIPS = {
     }
   }
   function exRow(id, i, note, targetTxt, extra = "") {
-    const e = exInfo(id);
+    const e = exInfo(id), side = extra.includes('class="log side"');
     return `<div class="ex">
       <div class="i">${i}</div>
-      <div>
-        <a class="name" href="#exercicio-${id.replace(/_/g, "-")}" style="color:inherit;text-decoration:none">${esc(e.pt)}</a>
-        ${targetTxt ? ` <span class="target">${esc(targetTxt)}</span>` : ""}
-        ${note ? `<div class="orig">${esc(note)}</div>` : ""}
+      <div class="exmain">
+        <div class="exhead">
+          <a class="name" href="#exercicio-${id.replace(/_/g, "-")}">${esc(e.pt)}</a>
+          ${targetTxt ? `<span class="target">${esc(targetTxt)}</span>` : ""}
+          ${note ? `<span class="orig">${esc(note)}</span>` : ""}
+        </div>
+        ${videoButtons(id)}
+        ${side ? "" : extra}
       </div>
-      ${videoButtons(id)}
-      ${extra}
+      ${side ? extra : ""}
     </div>`;
   }
 

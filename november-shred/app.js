@@ -533,16 +533,19 @@
     }
   }
   function exRow(id, i, note, targetTxt, extra = "") {
-    const e = exInfo(id);
+    const e = exInfo(id), side = extra.includes('class="log side"');
     return `<div class="ex">
       <div class="i">${i}</div>
-      <div>
-        <a class="name" href="#exercicio-${id.replace(/_/g, "-")}" style="color:inherit;text-decoration:none">${esc(e.pt)}</a>
-        ${targetTxt ? ` <span class="target">${esc(targetTxt)}</span>` : ""}
-        ${note ? `<div class="orig">${esc(note)}</div>` : ""}
+      <div class="exmain">
+        <div class="exhead">
+          <a class="name" href="#exercicio-${id.replace(/_/g, "-")}">${esc(e.pt)}</a>
+          ${targetTxt ? `<span class="target">${esc(targetTxt)}</span>` : ""}
+          ${note ? `<span class="orig">${esc(note)}</span>` : ""}
+        </div>
+        ${videoButtons(id)}
+        ${side ? "" : extra}
       </div>
-      ${videoButtons(id)}
-      ${extra}
+      ${side ? extra : ""}
     </div>`;
   }
 
