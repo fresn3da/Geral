@@ -119,7 +119,8 @@
   }
   function currentDay() { return Math.min(30, Math.max(1, todayIndex())); }
   function ytSearch(q) { return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q); }
-  function exInfo(id) { const e = EXERCISES[id]; return { id, pt: e[0], en: e[1], qEn: e[2], qPt: e[3] }; }
+  // Nomes exibidos em inglês (e[1]); o português (e[0]) fica só para a busca
+  function exInfo(id) { const e = EXERCISES[id]; return { id, pt: e[1], en: e[1], ptAlt: e[0], qEn: e[2], qPt: e[3] }; }
   function getLog(n) { return S.logs[n] || null; }
   function ensureLog(n) {
     if (!S.logs[n]) S.logs[n] = { done: false, level: S.settings.level, bell: S.settings.bell, ex: {}, sets: {}, amrapRounds: 0, amrapReps: 0 };
@@ -538,7 +539,7 @@
       <div>
         <a class="name" href="#exercicio-${id.replace(/_/g, "-")}" style="color:inherit;text-decoration:none">${esc(e.pt)}</a>
         ${targetTxt ? ` <span class="target">${esc(targetTxt)}</span>` : ""}
-        <div class="orig">${esc(e.en)}${note ? " · " + esc(note) : ""}</div>
+        ${note ? `<div class="orig">${esc(note)}</div>` : ""}
       </div>
       ${videoButtons(id)}
       ${extra}
@@ -1109,7 +1110,7 @@
     const vid = ytId(S.videos[it.id]), clip = clipOf(it.id);
     $("#fxVid").innerHTML = vid
       ? `<a class="fx-pill yt" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ YouTube</a>`
-      : clip ? "" : `<a class="fx-pill" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Vídeo</a>`;
+      : clip ? "" : `<a class="fx-pill" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">🔎 Vídeo</a>`;
     if (F.vidFor !== it.id) {
       F.vidFor = it.id;
       F.howTab = clip ? "video" : "how";
@@ -1304,13 +1305,13 @@
   // ---------- Exercícios ----------
   function usedIn(id) { return WORKOUTS.filter((w) => w.ex.some(([e]) => e === id)).map((w) => w.day); }
   function viewExercises() {
-    const ids = Object.keys(EXERCISES).sort((a, b) => exInfo(a).pt.localeCompare(exInfo(b).pt, "pt"));
+    const ids = Object.keys(EXERCISES).sort((a, b) => exInfo(a).en.localeCompare(exInfo(b).en, "en"));
     return `
       <div class="eyebrow">Biblioteca</div><h1>Exercícios <span class="lime">& vídeos</span></h1>
       <p class="small muted">${ids.length} movimentos do desafio. Toque em ▶ para ver a execução no YouTube. Achou um vídeo bom? Abra o exercício e fixe o link com ★.</p>
-      <input class="search" id="exSearch" type="search" placeholder="Buscar exercício (PT ou EN)…">
+      <input class="search" id="exSearch" type="search" placeholder="Buscar exercício…">
       <div class="card" id="exList">
-        ${ids.map((id) => `<div data-name="${esc((exInfo(id).pt + " " + exInfo(id).en).toLowerCase())}">${exRow(id, usedIn(id).length + "×", "", "", `<div class="log">Dias: ${usedIn(id).map((d) => `<a href="#dia-${d}">${d}</a>`).join(", ") || "aquecimento"}</div>`)}</div>`).join("")}
+        ${ids.map((id) => `<div data-name="${esc((exInfo(id).en + " " + exInfo(id).ptAlt).toLowerCase())}">${exRow(id, usedIn(id).length + "×", "", "", `<div class="log">Dias: ${usedIn(id).map((d) => `<a href="#dia-${d}">${d}</a>`).join(", ") || "aquecimento"}</div>`)}</div>`).join("")}
       </div>`;
   }
   function bindExercises() {
@@ -1326,7 +1327,7 @@
     return `
       <a class="btn sm ghost" href="#exercicios">← Exercícios</a>
       <div class="section"></div>
-      <div class="eyebrow">${esc(e.en)}</div><h1>${esc(e.pt)}</h1>
+      <div class="eyebrow">Exercício</div><h1>${esc(e.en)}</h1>
       <div class="card">
         <h3>Vídeos</h3>
         <p class="small muted" style="margin:6px 0 0">Busque um vídeo, copie o link e cole aqui. Ele fica salvo neste exercício em todos os treinos.</p>
