@@ -477,7 +477,9 @@
           ? `<button type="button" class="vbtn pin" data-play="${id}">▶ Assistir aqui</button>`
           : `<a class="vbtn pin" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ Meu vídeo</a>`)
       : "";
+    const clip = clipOf(id);
     return `<div class="vids">
+        ${clip ? `<button type="button" class="vbtn pin" data-clip="${id}">🎬 Demonstração</button>` : ""}
         ${mine}
         <a class="vbtn ${vid ? "alt" : ""}" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">🔎 Buscar (EN)</a>
         <a class="vbtn alt" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Buscar (PT)</a>
@@ -493,13 +495,24 @@
         </div>
       </div>`;
   }
+  // Vídeos de demonstração enviados (tocam dentro do app)
+  function clipOf(id) { return (typeof CLIPS !== "undefined" && CLIPS[id]) || null; }
+  function clipTag(id, cls) {
+    return `<video class="${cls || "clip"}" src="${esc(clipOf(id))}" muted autoplay loop playsinline preload="auto" aria-label="Demonstração: ${esc(exInfo(id).pt)}"></video>`;
+  }
   function refreshVideos(id) { $$(`[data-vw="${id}"]`).forEach((el) => (el.innerHTML = videoInner(id))); }
   function onVideoClick(ev) {
-    const b = ev.target.closest("[data-play],[data-paste],[data-pastesave],[data-pastedel],[data-pastecancel]");
+    const b = ev.target.closest("[data-clip],[data-play],[data-paste],[data-pastesave],[data-pastedel],[data-pastecancel]");
     if (!b) return;
     const wrap = b.closest(".vidwrap"); if (!wrap) return;
     const id = wrap.dataset.vw, box = $("[data-pastebox]", wrap), player = $("[data-player]", wrap);
+    if (b.dataset.clip) {
+      if (!player.hidden && player.dataset.kind === "clip") { player.hidden = true; player.innerHTML = ""; b.textContent = "🎬 Demonstração"; return; }
+      player.innerHTML = clipTag(id); player.dataset.kind = "clip"; player.hidden = false; b.textContent = "✕ Fechar demonstração";
+      return;
+    }
     if (b.dataset.play) {
+      player.dataset.kind = "yt";
       if (!player.hidden) { player.hidden = true; player.innerHTML = ""; b.textContent = "▶ Assistir aqui"; return; }
       const vid = ytId(S.videos[id]);
       player.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&autoplay=1" title="${esc(exInfo(id).pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
@@ -974,7 +987,7 @@
           <button type="button" class="btn fx-nav" id="fxNext" aria-label="Próximo exercício">›</button>
         </div>
         <div class="fx-how">
-          <div class="fx-howhead"><b>Como fazer</b><span id="fxVid"></span></div>
+          <div class="fx-howhead"><span id="fxHowTabs"><b>Como fazer</b></span><span id="fxVid"></span></div>
           <div id="fxPlayer"></div>
           <ol id="fxHow"></ol>
           <p class="fx-warn" id="fxWarn"></p>
@@ -995,6 +1008,7 @@
       const box = $("#timerBox [data-t=play]"); if (box && (T.running || T.remain < (T.segs[T.i]?.secs || 0) * 1000)) box.click();
     };
     $("#fxTabs").onclick = (e) => { const b = e.target.closest("[data-sec]"); if (b) { F.sec = b.dataset.sec; fxPaintList(); } };
+    $("#fxHowTabs").onclick = (e) => { const b = e.target.closest("[data-howtab]"); if (b) { F.howTab = b.dataset.howtab; fxPaintHow(); } };
     $("#fxList").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) { F.idx = +b.dataset.fx; fxRender(true); } };
     keepAwake(true);
     fxRender(true);
@@ -1102,11 +1116,24 @@
       : `<a class="vbtn alt" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Buscar vídeo</a>`;
     if (F.vidFor !== it.id) {
       F.vidFor = it.id;
-      $("#fxPlayer").innerHTML = CAN_EMBED && vid ? `<div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&mute=1&loop=1&playlist=${vid}" title="${esc(e.pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>` : "";
+      F.howTab = clipOf(it.id) ? "video" : "how";
+      $("#fxPlayer").innerHTML = clipOf(it.id) ? clipTag(it.id, "fx-clip") : CAN_EMBED && vid ? `<div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&mute=1&loop=1&playlist=${vid}" title="${esc(e.pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>` : "";
     }
+    fxPaintHow();
     if (F.lastIdx !== F.idx) F.sec = it.kind;
     fxPaintList();
     if (F.lastIdx !== F.idx) { F.lastIdx = F.idx; const body = $("#focus .fx-body"); if (body) body.scrollTop = 0; }
+  }
+  function fxPaintHow() {
+    const it = focusItems(F.n)[F.idx]; if (!it) return;
+    const clip = clipOf(it.id), showVid = clip && F.howTab === "video";
+    $("#fxHowTabs").innerHTML = clip
+      ? `<span class="fx-howtabs"><button type="button" data-howtab="video" class="${showVid ? "on" : ""}">🎬 Vídeo</button><button type="button" data-howtab="how" class="${showVid ? "" : "on"}">📋 Como fazer</button></span>`
+      : `<b>Como fazer</b>`;
+    const pl = $("#fxPlayer"); pl.hidden = clip ? !showVid : !pl.innerHTML;
+    $("#fxHow").hidden = !!showVid; $("#fxWarn").hidden = !!showVid;
+    $("#fxHow").closest(".fx-how").classList.toggle("has-video", !!showVid);
+    const v = $("#fxPlayer video"); if (v && showVid) { const pr = v.play(); if (pr) pr.catch(() => {}); }
   }
   function fxPaintList() {
     const n = F.n, items = focusItems(n);

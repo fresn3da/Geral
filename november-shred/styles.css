@@ -309,3 +309,16 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { .fx-ring .fg { transition: none; } }
 html.fx-lock .toast { top: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+
+/* Vídeos de demonstração */
+video.clip { width: 100%; max-width: 420px; aspect-ratio: 1 / 1; object-fit: contain; background: #000; border-radius: 12px; display: block; }
+.player:has(video.clip) { aspect-ratio: auto; background: transparent; }
+.player video.clip { position: static; }
+.fx-howtabs { display: inline-grid; grid-template-columns: auto auto; gap: 3px; background: var(--card-2); border-radius: 9px; padding: 3px; }
+.fx-howtabs button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 800; padding: 5px 9px; border-radius: 7px; cursor: pointer; }
+.fx-howtabs button.on { background: var(--card); color: var(--text); }
+#fxPlayer { display: flex; justify-content: center; min-height: 0; }
+video.fx-clip { width: auto; max-width: 100%; height: min(34vh, 300px); aspect-ratio: 1 / 1; object-fit: contain; background: #000; border-radius: 12px; display: block; }
+.fx-how.has-video { flex: 1 1 auto; }
+.fx-how.has-video #fxPlayer { flex: 1 1 auto; min-height: 0; }
+.fx-how.has-video video.fx-clip { height: 100%; max-height: 100%; }

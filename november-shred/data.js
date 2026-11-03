@@ -205,3 +205,8 @@ const HOWTO = {
   pushup_passover:  ["Prancha alta com o kettlebell ao lado de uma das mãos.", "Faça uma flexão.", "No alto, passe o kettlebell para o outro lado com a mão oposta e repita.", "Atenção: quadril estável ao tirar uma mão do chão."],
   grip_rolls:       ["Segure o kettlebell pela alça com o braço ao lado do corpo ou à frente.", "Gire o punho para frente e para trás (flexão e extensão), apertando forte a alça.", "Faça as reps e troque a mão.", "Atenção: use um peso leve e movimentos lentos."],
 };
+
+// Vídeos de demonstração enviados por você (id do exercício -> arquivo)
+const CLIPS = {
+  halos: "videos/halos.mp4",
+};
