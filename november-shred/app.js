@@ -358,7 +358,7 @@
 
   // ---------- Router ----------
   function route() {
-    const h = decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "hoje";
+    const h = decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "calendario";
     const cut = h.search(/[-/]/);
     const name = cut < 0 ? h : h.slice(0, cut), arg = cut < 0 ? "" : h.slice(cut + 1);
     timerStop(true); closeFocus();
@@ -463,7 +463,7 @@
         <summary>🔥 Aquecimento (5 min) <span class="lime small" id="warmCount">${WARMUP.filter((_, k) => wd[k]).length}/${WARMUP.length}</span></summary>
         <p class="small muted" style="margin:8px 0 0">Kettlebell leve. Toque no ✓ ao terminar cada exercício: o descanso começa ao lado. O primeiro ✓ marca o início do treino.</p>
         ${WARMUP.map(([id, note], k) => exRow(id, k + 1, note, "",
-          `<div class="log"><button type="button" class="setbox ${wd[k] ? "on" : ""}" data-warm="${k}" aria-label="Feito">✓</button><button type="button" class="restpill" data-rest="w${k}" hidden></button></div>`)).join("")}
+          `<div class="log side"><button type="button" class="setbox ${wd[k] ? "on" : ""}" data-warm="${k}" aria-label="Feito">✓</button><button type="button" class="restpill" data-rest="w${k}" hidden></button></div>`)).join("")}
       </details>`;
   }
 
@@ -481,9 +481,8 @@
     return `<div class="vids">
         ${clip ? `<button type="button" class="vbtn pin" data-clip="${id}">🎬 Demonstração</button>` : ""}
         ${mine}
-        <a class="vbtn ${vid ? "alt" : ""}" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">🔎 Buscar (EN)</a>
-        <a class="vbtn alt" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Buscar (PT)</a>
-        <button type="button" class="vbtn ghostv" data-paste="${id}">${vid ? "✎ Trocar vídeo" : "＋ Colar link do YouTube"}</button>
+        ${vid ? "" : `<a class="vbtn" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">🔎 Buscar</a>`}
+        <button type="button" class="vbtn ghostv" data-paste="${id}">${vid ? "✎ Trocar" : "＋ Colar link"}</button>
       </div>
       <div class="player" data-player hidden></div>
       <div class="pastebox" data-pastebox hidden>
@@ -1411,6 +1410,8 @@
   // ---------- Init ----------
   window.addEventListener("hashchange", route);
   document.addEventListener("pointerdown", unlockAudio, true);
+  // Ao abrir o app, começa sempre no Calendário
+  if (location.hash && location.hash !== "#calendario") { try { history.replaceState(null, "", "#calendario"); } catch (e) { location.hash = ""; } }
   document.addEventListener("click", onVideoClick);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.running) keepAwake(true); });
   route();

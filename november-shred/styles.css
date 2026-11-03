@@ -122,7 +122,12 @@ h3 { font-size: 22px; }
 .wlist .check { margin-left: auto; color: var(--lime); font-weight: 800; }
 
 /* Exercises */
-.ex { display: grid; grid-template-columns: 26px 1fr; gap: 6px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.ex { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.ex > .i { grid-column: 1; }
+.ex > div:nth-child(2) { grid-column: 2 / -1; }
+.ex .log.side { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end; align-self: center; }
+.ex:has(.log.side) > div:nth-child(2) { grid-column: 2; }
+.ex:has(.log.side) .vidwrap { grid-column: 2; }
 .ex:last-child { border-bottom: 0; }
 .ex .i { font-family: var(--display); font-size: 22px; color: var(--lime); font-style: italic; line-height: 1.1; }
 .ex .name { font-weight: 800; }
@@ -137,7 +142,7 @@ h3 { font-size: 22px; }
 .vbtn.pin { background: var(--lime); color: var(--lime-ink); }
 button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
 .vbtn.ghostv { background: transparent; border: 1.5px dashed var(--line); color: var(--text); }
-.vidwrap { grid-column: 2; display: grid; gap: 8px; min-width: 0; }
+.vidwrap { grid-column: 2 / -1; display: grid; gap: 8px; min-width: 0; }
 .vidwrap .vids { grid-column: auto; }
 .player { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
 .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
@@ -168,7 +173,7 @@ button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
 .sync.bad { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
 .times { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; margin-top: 8px; padding: 10px 12px; background: var(--card-2); border-radius: 10px; }
 .restpill.go { background: var(--lime); color: var(--lime-ink); outline-color: var(--lime); }
-.ex .log { grid-column: 2; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.ex .log { grid-column: 2 / -1; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
 .scale { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; }
 .scale b { display: block; font-size: 11px; letter-spacing: 1.5px; color: var(--lime); }
