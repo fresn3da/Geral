@@ -261,9 +261,9 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
 .fx-icon { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--card-2); color: var(--text); font-size: 15px; cursor: pointer; }
 .fx-title { font-family: var(--display); font-style: italic; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fx-count { font-weight: 800; color: var(--lime); font-variant-numeric: tabular-nums; }
-.fx-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px 12px; max-width: 720px; width: 100%; margin: 0 auto; overflow: hidden; }
+.fx-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 10px; max-width: 720px; width: 100%; margin: 0 auto; overflow: hidden; }
 .fx-hero { flex: none; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
-.fx-ring { position: relative; width: 104px; height: 104px; border: 0; padding: 0; background: none; cursor: pointer; color: var(--text); }
+.fx-ring { position: relative; width: 96px; height: 96px; border: 0; padding: 0; background: none; cursor: pointer; color: var(--text); }
 .fx-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .fx-ring circle { fill: none; stroke-width: 8; }
 .fx-ring .bg { stroke: var(--card-2); }
@@ -271,7 +271,7 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
 .fx-ring.rest .fg { stroke: #6ec1ff; }
 .fx-ring.idle .fg { stroke: var(--line); }
 .fx-ringin { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-#fxBig { font-family: var(--display); font-size: 38px; line-height: 1; font-variant-numeric: tabular-nums; }
+#fxBig { font-family: var(--display); font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
 #fxSmall { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 800; }
 .fx-info { min-width: 0; display: grid; gap: 3px; }
 .fx-phase { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--lime); font-weight: 800; }
@@ -282,26 +282,26 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
 .fx-dot { display: inline-flex; width: 24px; height: 24px; border-radius: 7px; align-items: center; justify-content: center; background: var(--card-2); color: var(--muted); font-size: 12px; }
 .fx-dot.on { background: var(--lime); color: var(--lime-ink); }
 .fx-actions { flex: none; display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; }
-.fx-main { font-size: 16px; min-height: 50px; padding: 8px 10px; }
-.fx-nav { font-size: 24px; min-height: 50px; padding: 0; }
-.fx-how { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.fx-main { font-size: 16px; min-height: 48px; padding: 8px 10px; }
+.fx-nav { font-size: 24px; min-height: 48px; padding: 0; }
+.fx-how { flex: 0 1 auto; min-height: 0; overflow-y: auto; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 12px; display: flex; flex-direction: column; gap: 5px; }
 .fx-howhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .fx-howhead .vbtn { padding: 5px 9px; }
-.fx-how ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; line-height: 1.35; }
+.fx-how ol { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 14px; line-height: 1.3; }
 .fx-warn { margin: 0; font-size: 13px; line-height: 1.35; color: var(--text); background: color-mix(in srgb, var(--danger) 14%, transparent); border-radius: 10px; padding: 6px 9px; }
 .fx-warn:empty { display: none; }
 #fxPlayer:empty { display: none; }
 .fx-listwrap { flex: none; display: grid; gap: 6px; }
 .fx-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--card-2); border-radius: 10px; padding: 3px; }
-.fx-tabs button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 6px 4px; border-radius: 8px; cursor: pointer; }
+.fx-tabs button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 5px 4px; border-radius: 8px; cursor: pointer; }
 .fx-tabs button span { font-variant-numeric: tabular-nums; opacity: .8; margin-left: 4px; }
 .fx-tabs button.on { background: var(--card); color: var(--text); }
 .fx-list { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.fx-item { display: grid; grid-template-columns: 30px 1fr; gap: 6px; align-items: center; text-align: left; border: 0; border-radius: 10px; padding: 6px 8px; background: var(--card); color: var(--text); cursor: pointer; min-width: 0; font-family: inherit; }
+.fx-item { display: grid; grid-template-columns: 28px 1fr; gap: 6px; align-items: center; text-align: left; border: 0; border-radius: 10px; padding: 5px 8px; background: var(--card); color: var(--text); cursor: pointer; min-width: 0; font-family: inherit; }
 .fx-item .fx-num { font-family: var(--display); font-size: 18px; color: var(--muted); white-space: nowrap; }
-.fx-item .fx-txt { min-width: 0; display: grid; }
-.fx-item b { font-size: 12.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fx-item small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-item .fx-txt { min-width: 0; display: block; line-height: 1.25; }
+.fx-item b { font-size: 13px; }
+.fx-item small { font-size: 11.5px; color: var(--muted); }
 .fx-item.done { opacity: .55; }
 .fx-item.done .fx-num::after { content: "✓"; color: var(--lime); font-size: 13px; margin-left: 1px; }
 .fx-item.on { background: var(--lime); color: var(--lime-ink); opacity: 1; }
@@ -310,7 +310,7 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
   .fx-ring { width: 88px; height: 88px; } #fxBig { font-size: 32px; }
   .fx-name { font-size: 24px; } .fx-sub { display: none; }
   .fx-main, .fx-nav { min-height: 44px; }
-  .fx-how ol { font-size: 13px; } .fx-item small { display: none; }
+  .fx-how ol { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .fx-ring .fg { transition: none; } }
 html.fx-lock .toast { top: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
@@ -1667,7 +1667,7 @@ const HOWTO = {
       if (x.kind !== F.sec) return "";
       const xi = exInfo(x.id), lab = x.kind === "warm" ? `A${x.k + 1}` : String(x.i + 1).padStart(2, "0");
       return `<button type="button" class="fx-item ${j === F.idx ? "on" : ""} ${fxItemDone(n, x) ? "done" : ""}" data-fx="${j}">
-        <span class="fx-num">${lab}</span><span class="fx-txt"><b>${esc(xi.pt)}</b><small>${esc(fxSub(n, x))}</small></span></button>`;
+        <span class="fx-num">${lab}</span><span class="fx-txt"><b>${esc(xi.pt)}</b> <small>${esc(fxSub(n, x))}</small></span></button>`;
     }).join("");
   }
   function fxTargetHtml(n, it) {

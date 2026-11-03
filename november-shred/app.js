@@ -1119,7 +1119,7 @@
       if (x.kind !== F.sec) return "";
       const xi = exInfo(x.id), lab = x.kind === "warm" ? `A${x.k + 1}` : String(x.i + 1).padStart(2, "0");
       return `<button type="button" class="fx-item ${j === F.idx ? "on" : ""} ${fxItemDone(n, x) ? "done" : ""}" data-fx="${j}">
-        <span class="fx-num">${lab}</span><span class="fx-txt"><b>${esc(xi.pt)}</b><small>${esc(fxSub(n, x))}</small></span></button>`;
+        <span class="fx-num">${lab}</span><span class="fx-txt"><b>${esc(xi.pt)}</b> <small>${esc(fxSub(n, x))}</small></span></button>`;
     }).join("");
   }
   function fxTargetHtml(n, it) {
