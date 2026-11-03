@@ -969,28 +969,30 @@
         <div class="fx-count" id="fxCount"></div>
       </div>
       <div class="fx-body">
-        <div class="fx-hero">
-          <button type="button" class="fx-ring" id="fxRing" aria-label="Pausar ou continuar o timer">
+        <div class="fx-stage" id="fxStage">
+          <div class="fx-media" id="fxMedia"></div>
+          <div class="fx-howbox" id="fxHowBox">
+            <ol id="fxHow"></ol>
+            <p class="fx-warn" id="fxWarn"></p>
+          </div>
+          <div class="fx-c fx-tl">
+            <div class="fx-name" id="fxName"></div>
+            <div class="fx-target" id="fxTarget"></div>
+          </div>
+          <button type="button" class="fx-c fx-tr fx-ring" id="fxRing" aria-label="Pausar ou continuar o timer">
             <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" id="fxArc" cx="60" cy="60" r="52"/></svg>
             <span class="fx-ringin"><span id="fxBig"></span><span id="fxSmall"></span></span>
           </button>
-          <div class="fx-info">
-            <div class="fx-phase" id="fxPhase"></div>
-            <div class="fx-name" id="fxName"></div>
-            <div class="fx-sub" id="fxSub"></div>
-            <div class="fx-target" id="fxTarget"></div>
+          <div class="fx-c fx-bl" id="fxProgress"></div>
+          <div class="fx-c fx-br">
+            <button type="button" class="fx-pill" id="fxHowBtn"></button>
+            <span id="fxVid"></span>
           </div>
         </div>
         <div class="fx-actions">
           <button type="button" class="btn fx-nav" id="fxPrev" aria-label="Exercício anterior">‹</button>
           <button type="button" class="btn primary fx-main" id="fxMain"></button>
           <button type="button" class="btn fx-nav" id="fxNext" aria-label="Próximo exercício">›</button>
-        </div>
-        <div class="fx-how">
-          <div class="fx-howhead"><span id="fxHowTabs"><b>Como fazer</b></span><span id="fxVid"></span></div>
-          <div id="fxPlayer"></div>
-          <ol id="fxHow"></ol>
-          <p class="fx-warn" id="fxWarn"></p>
         </div>
         <div class="fx-listwrap">
           <div class="fx-tabs" id="fxTabs"></div>
@@ -1008,7 +1010,7 @@
       const box = $("#timerBox [data-t=play]"); if (box && (T.running || T.remain < (T.segs[T.i]?.secs || 0) * 1000)) box.click();
     };
     $("#fxTabs").onclick = (e) => { const b = e.target.closest("[data-sec]"); if (b) { F.sec = b.dataset.sec; fxPaintList(); } };
-    $("#fxHowTabs").onclick = (e) => { const b = e.target.closest("[data-howtab]"); if (b) { F.howTab = b.dataset.howtab; fxPaintHow(); } };
+    $("#fxHowBtn").onclick = () => { F.howTab = F.howTab === "how" ? "video" : "how"; fxPaintHow(); };
     $("#fxList").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) { F.idx = +b.dataset.fx; fxRender(true); } };
     keepAwake(true);
     fxRender(true);
@@ -1052,88 +1054,82 @@
   function fxRender(full) {
     if (!F.open || !$("#focus")) return;
     const n = F.n, w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level), items = focusItems(n);
-    // no intervalado/AMRAP em andamento, o destaque segue o timer
+    // no intervalado em andamento, o destaque segue o timer
     if (w.type === "interval" && fxTimerStarted()) { const seg = T.segs[T.i]; if (seg && seg.exIdx != null) { const ni = WARMUP.length + seg.exIdx; if (ni !== F.idx) { F.idx = ni; full = true; } } }
     const it = items[F.idx];
-    // Anel
+    // Timer (só aparece quando há contagem)
     const C = 2 * Math.PI * 52;
-    let big = "", small = "", frac = 1, phase = "", cls = "";
+    let big = "", small = "", frac = 1, cls = "idle";
     if (R.key) {
       const rem = R.running ? Math.max(0, R.endAt - Date.now()) : R.remain;
       big = rem > 0 ? String(Math.ceil(rem / 1000)) : "✓"; small = rem > 0 ? (R.running ? "descanso" : "pausado") : "bora!";
-      frac = R.secs ? rem / (R.secs * 1000) : 0; phase = rem > 0 ? "Descanso" : "Próximo!"; cls = "rest";
+      frac = R.secs ? rem / (R.secs * 1000) : 0; cls = "rest";
     } else if (fxTimerStarted() || (T.segs.length && T.remain === 0)) {
       const seg = T.segs[T.i] || { secs: 1, phase: "" };
       const rem = T.running ? Math.max(0, T.endAt - Date.now()) : T.remain;
-      big = rem > 0 ? mmss(rem) : "✓"; small = T.running ? "" : rem > 0 ? "pausado" : "fim";
-      frac = rem / (seg.secs * 1000); phase = rem <= 0 ? "Finalizado! 💪" : { prep: "Prepare-se", work: "Vai!", rest: "Descanso" }[seg.phase] || ""; cls = seg.phase === "rest" ? "rest" : "work";
-    } else if (it) {
-      if (it.kind === "warm") { big = (it.note.match(/x\d+/) || ["✓"])[0]; small = "aquecimento"; }
-      else if (w.type === "sets") { big = String(t.reps); small = "reps"; }
-      else if (w.type === "amrap") { big = `${w.amrap}'`; small = "AMRAP"; }
-      else { big = `${w.work}s`; small = `× ${t.rounds} rounds`; }
-      frac = 1; phase = it.kind === "warm" ? "Aquecimento" : "Pronto"; cls = "idle";
+      big = rem > 0 ? mmss(rem) : "✓";
+      small = rem <= 0 ? "fim" : !T.running ? "pausado" : { prep: "prepare", work: "vai!", rest: "descanso" }[seg.phase] || "";
+      frac = rem / (seg.secs * 1000); cls = seg.phase === "rest" ? "rest" : "work";
     }
     $("#fxBig").textContent = big; $("#fxSmall").textContent = small;
     const arc = $("#fxArc"); arc.style.strokeDasharray = C; arc.style.strokeDashoffset = C * (1 - Math.max(0, Math.min(1, frac)));
-    $("#fxRing").className = "fx-ring " + cls;
-    $("#fxPhase").textContent = phase;
+    $("#fxRing").className = "fx-c fx-tr fx-ring " + cls;
     // Botão principal
     let main = "";
     if (!it) main = "";
     else if (it.kind === "warm") main = fxItemDone(n, it) ? "Próximo ›" : "✓ Feito";
     else if (w.type === "sets") {
-      const d = fxSetsDone(n, it.i), s = Array.from({ length: t.sets }, (_, x) => x).find((x) => !d[x]);
-      main = s == null ? (it.i === w.ex.length - 1 ? "✓ Treino concluído" : "Próximo exercício ›") : `✓ Série ${s + 1} de ${t.sets} feita`;
+      const d = fxSetsDone(n, it.i), s2 = Array.from({ length: t.sets }, (_, x) => x).find((x) => !d[x]);
+      main = s2 == null ? (it.i === w.ex.length - 1 ? "✓ Treino concluído" : "Próximo exercício ›") : `✓ Série ${s2 + 1} de ${t.sets} feita`;
     } else if (w.type === "interval") main = T.running ? "⏸ Pausar" : fxTimerStarted() ? "▶ Continuar" : (T.remain === 0 && T.segs.length ? "✓ Concluído" : `▶ Iniciar ${t.rounds} rounds`);
     else main = fxTimerStarted() ? (F.amrapIdx === w.ex.length - 1 ? "✓ Feito · fecha o round" : "✓ Feito · próximo") : `▶ Iniciar AMRAP ${w.amrap} min`;
     const mb = $("#fxMain"); if (mb.textContent !== main) mb.textContent = main;
-    // Contador
+    // Contador geral
     const doneN = items.filter((x) => fxItemDone(n, x)).length;
     $("#fxCount").textContent = w.type === "amrap" ? `${l.amrapRounds || 0} rounds` : `${doneN}/${items.length}`;
+    // Cantos que mudam com o tempo
+    const prog = fxProgressHtml(n, it); if ($("#fxProgress").innerHTML !== prog) $("#fxProgress").innerHTML = prog;
+    $("#fxProgress").hidden = !prog;
     if (!full) {
-      // atualiza só o alvo (séries/rounds) e os checks da lista
-      $("#fxTarget").innerHTML = fxTargetHtml(n, it);
       const tabs = $$("#fxTabs [data-sec] span"), its = focusItems(n);
       if (tabs.length === 2) {
         tabs[0].textContent = `${its.filter((x) => x.kind === "warm" && fxItemDone(n, x)).length}/${WARMUP.length}`;
         if (w.type === "sets") tabs[1].textContent = `${its.filter((x) => x.kind === "ex" && fxItemDone(n, x)).length}/${its.filter((x) => x.kind === "ex").length}`;
       }
       $$("#fxList [data-fx]").forEach((b) => { const x = items[+b.dataset.fx]; b.classList.toggle("done", fxItemDone(n, x)); b.classList.toggle("on", +b.dataset.fx === F.idx); });
+      const tg = fxTargetText(n, it); if ($("#fxTarget").textContent !== tg) $("#fxTarget").textContent = tg;
       return;
     }
     if (!it) return;
     const e = exInfo(it.id), how = HOWTO[it.id] || [];
     $("#fxName").textContent = e.pt;
-    $("#fxSub").textContent = `${e.en}${it.note ? " · " + it.note : ""}`;
-    $("#fxTarget").innerHTML = fxTargetHtml(n, it);
+    $("#fxTarget").textContent = fxTargetText(n, it);
     const steps = how.filter((x) => !/^Atenção:/.test(x)), warn = how.find((x) => /^Atenção:/.test(x));
     $("#fxHow").innerHTML = steps.map((x) => `<li>${esc(x)}</li>`).join("");
     $("#fxWarn").innerHTML = warn ? `⚠️ <b>Atenção:</b> ${esc(warn.replace(/^Atenção:\s*/, ""))}` : "";
-    const vid = ytId(S.videos[it.id]);
+    const vid = ytId(S.videos[it.id]), clip = clipOf(it.id);
     $("#fxVid").innerHTML = vid
-      ? `<a class="vbtn pin" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ Meu vídeo</a>`
-      : `<a class="vbtn alt" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Buscar vídeo</a>`;
+      ? `<a class="fx-pill yt" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ YouTube</a>`
+      : clip ? "" : `<a class="fx-pill" href="${ytSearch(e.qPt)}" target="_blank" rel="noopener">🔎 Vídeo</a>`;
     if (F.vidFor !== it.id) {
       F.vidFor = it.id;
-      F.howTab = clipOf(it.id) ? "video" : "how";
-      $("#fxPlayer").innerHTML = clipOf(it.id) ? clipTag(it.id, "fx-clip") : CAN_EMBED && vid ? `<div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&mute=1&loop=1&playlist=${vid}" title="${esc(e.pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>` : "";
+      F.howTab = clip ? "video" : "how";
+      $("#fxMedia").innerHTML = clip ? clipTag(it.id, "fx-clip")
+        : CAN_EMBED && vid ? `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&mute=1&loop=1&playlist=${vid}" title="${esc(e.pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>` : "";
     }
     fxPaintHow();
-    if (F.lastIdx !== F.idx) F.sec = it.kind;
+    if (F.lastIdx !== F.idx) { F.sec = it.kind; F.lastIdx = F.idx; }
     fxPaintList();
-    if (F.lastIdx !== F.idx) { F.lastIdx = F.idx; const body = $("#focus .fx-body"); if (body) body.scrollTop = 0; }
   }
   function fxPaintHow() {
     const it = focusItems(F.n)[F.idx]; if (!it) return;
-    const clip = clipOf(it.id), showVid = clip && F.howTab === "video";
-    $("#fxHowTabs").innerHTML = clip
-      ? `<span class="fx-howtabs"><button type="button" data-howtab="video" class="${showVid ? "on" : ""}">🎬 Vídeo</button><button type="button" data-howtab="how" class="${showVid ? "" : "on"}">📋 Como fazer</button></span>`
-      : `<b>Como fazer</b>`;
-    const pl = $("#fxPlayer"); pl.hidden = clip ? !showVid : !pl.innerHTML;
-    $("#fxHow").hidden = !!showVid; $("#fxWarn").hidden = !!showVid;
-    $("#fxHow").closest(".fx-how").classList.toggle("has-video", !!showVid);
-    const v = $("#fxPlayer video"); if (v && showVid) { const pr = v.play(); if (pr) pr.catch(() => {}); }
+    const hasMedia = !!$("#fxMedia").innerHTML, showHow = !hasMedia || F.howTab === "how";
+    const st = $("#fxStage");
+    st.classList.toggle("has-media", hasMedia);
+    st.classList.toggle("show-how", showHow);
+    $("#fxHowBtn").hidden = !hasMedia;
+    $("#fxHowBtn").textContent = showHow ? "🎬 Vídeo" : "📋 Como fazer";
+    const v = $("#fxMedia video"); if (v && !showHow) { const pr = v.play(); if (pr) pr.catch(() => {}); }
   }
   function fxPaintList() {
     const n = F.n, items = focusItems(n);
@@ -1144,23 +1140,32 @@
       <button type="button" data-sec="ex" class="${F.sec === "ex" ? "on" : ""}">Treino <span>${WORKOUTS[n - 1].type === "sets" ? `${exDone}/${exItems.length}` : exItems.length}</span></button>`;
     $("#fxList").innerHTML = items.map((x, j) => {
       if (x.kind !== F.sec) return "";
-      const xi = exInfo(x.id), lab = x.kind === "warm" ? `A${x.k + 1}` : String(x.i + 1).padStart(2, "0");
+      const lab = x.kind === "warm" ? `A${x.k + 1}` : String(x.i + 1).padStart(2, "0");
       return `<button type="button" class="fx-item ${j === F.idx ? "on" : ""} ${fxItemDone(n, x) ? "done" : ""}" data-fx="${j}">
-        <span class="fx-num">${lab}</span><span class="fx-txt"><b>${esc(xi.pt)}</b> <small>${esc(fxSub(n, x))}</small></span></button>`;
+        <span class="fx-num">${lab}</span><span class="fx-txt">${esc(exInfo(x.id).pt)}</span></button>`;
     }).join("");
   }
-  function fxTargetHtml(n, it) {
+  // Canto superior esquerdo: o que fazer (uma vez só)
+  function fxTargetText(n, it) {
     if (!it) return "";
     const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
-    if (it.kind === "warm") return fxItemDone(n, it) ? `<span class="lime">✓ Feito</span>` : "Toque em ✓ Feito ao terminar";
+    if (it.kind === "warm") return it.note;
+    if (w.type === "sets") return `${t.reps} reps${it.note ? " · " + it.note : ""}`;
+    if (w.type === "amrap") return `x${it.reps + t.plus}${it.note ? " " + it.note : ""}`;
+    return `${w.work}s${it.note ? " · " + it.note : ""}`;
+  }
+  // Canto inferior esquerdo: progresso (séries / rounds / feito)
+  function fxProgressHtml(n, it) {
+    if (!it) return "";
+    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    if (it.kind === "warm") return fxItemDone(n, it) ? `<span class="fx-badge on">✓ Feito</span>` : "";
     if (w.type === "sets") {
       const d = fxSetsDone(n, it.i);
-      return `${t.reps} reps · ` + Array.from({ length: t.sets }, (_, s) => `<span class="fx-dot ${d[s] ? "on" : ""}">${s + 1}</span>`).join("");
+      return Array.from({ length: t.sets }, (_, x) => `<span class="fx-dot ${d[x] ? "on" : ""}">${x + 1}</span>`).join("");
     }
-    if (w.type === "amrap") return `x${it.reps + t.plus} reps · Round ${(l.amrapRounds || 0) + 1}`;
-    const seg = T.segs[T.i];
-    const m = seg && seg.sub ? seg.sub.match(/Round (\d+)\/(\d+)/) : null;
-    return m ? `Round ${m[1]} de ${m[2]}` : `${w.work}s · ${t.rounds} rounds`;
+    if (w.type === "amrap") return `<span class="fx-badge">Round ${(l.amrapRounds || 0) + 1}</span>`;
+    const seg = T.segs[T.i], m = seg && seg.sub ? seg.sub.match(/Round (\d+)\/(\d+)/) : null;
+    return `<span class="fx-badge">${m ? `Round ${m[1]}/${m[2]}` : `${t.rounds} rounds`}</span>`;
   }
 
   // ---------- Evolução ----------
