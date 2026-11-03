@@ -358,3 +358,35 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
 
 button.fx-dot, button.fx-badge { cursor: pointer; font-family: inherit; }
 button.fx-badge { border: 0; }
+
+/* Sequências / treinos avulsos */
+.runlist { padding-top: 6px; padding-bottom: 6px; }
+.runrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.runrow:last-child { border-bottom: 0; }
+.runrow.on .runinfo b { color: var(--lime); }
+.runrow:not(:has([data-delrun])) { grid-template-columns: minmax(0, 1fr) auto; }
+.runinfo { display: grid; gap: 2px; min-width: 0; }
+.cal .restday { aspect-ratio: 1 / 1.15; border-radius: 10px; padding: 5px; display: flex; flex-direction: column; justify-content: space-between; border: 1px dashed var(--line); color: var(--muted); min-width: 0; }
+.cal .restday .n { font-family: var(--display); font-size: 24px; font-style: italic; line-height: 1; }
+.cal .restday .t { font-size: 9px; }
+.cal .restday.today { outline: 2px solid var(--lime); outline-offset: 1px; }
+
+/* Adm */
+.seg4 { grid-template-columns: repeat(4, 1fr); }
+.seg4 a { text-align: center; padding: 9px 2px; border-radius: 9px; font-weight: 800; font-size: 12.5px; color: var(--muted); text-decoration: none; }
+.seg4 a.on { background: var(--lime); color: var(--lime-ink); }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.edrows { display: grid; gap: 8px; margin: 10px 0; }
+.edrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 8px; border-radius: 12px; background: var(--card-2); }
+.edrow > select, .edrow > input { width: 100%; min-width: 0; background: var(--bg); border: 1.5px solid var(--line); border-radius: 9px; padding: 8px; font-size: 16px; color: var(--text); }
+.edrow > input[type="text"] { grid-column: 2 / -1; }
+.edrow > .edreps { grid-column: auto; width: 64px; }
+.edrow:has(.edreps) { grid-template-columns: 22px minmax(0, 1fr) 64px; }
+.edrow:has(.edreps) > input[type="text"] { grid-column: 2 / -1; }
+.edrow .edbtns { grid-column: 2 / -1; display: flex; gap: 4px; justify-content: flex-end; }
+.edrow .edbtns .btn { min-height: 32px; padding: 4px 10px; }
+.ednum { font-family: var(--display); font-size: 18px; color: var(--lime); text-align: center; }
+.edrow.dayrow { grid-template-columns: 74px minmax(0, 1fr); }
+.edday { font-weight: 800; font-size: 13px; }
+.edactions { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 20px; }
+.edactions .grow { flex: 1; }

@@ -364,6 +364,38 @@ html.fx-lock, html.fx-lock body { overflow: hidden; }
 button.fx-dot, button.fx-badge { cursor: pointer; font-family: inherit; }
 button.fx-badge { border: 0; }
 
+/* Sequências / treinos avulsos */
+.runlist { padding-top: 6px; padding-bottom: 6px; }
+.runrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.runrow:last-child { border-bottom: 0; }
+.runrow.on .runinfo b { color: var(--lime); }
+.runrow:not(:has([data-delrun])) { grid-template-columns: minmax(0, 1fr) auto; }
+.runinfo { display: grid; gap: 2px; min-width: 0; }
+.cal .restday { aspect-ratio: 1 / 1.15; border-radius: 10px; padding: 5px; display: flex; flex-direction: column; justify-content: space-between; border: 1px dashed var(--line); color: var(--muted); min-width: 0; }
+.cal .restday .n { font-family: var(--display); font-size: 24px; font-style: italic; line-height: 1; }
+.cal .restday .t { font-size: 9px; }
+.cal .restday.today { outline: 2px solid var(--lime); outline-offset: 1px; }
+
+/* Adm */
+.seg4 { grid-template-columns: repeat(4, 1fr); }
+.seg4 a { text-align: center; padding: 9px 2px; border-radius: 9px; font-weight: 800; font-size: 12.5px; color: var(--muted); text-decoration: none; }
+.seg4 a.on { background: var(--lime); color: var(--lime-ink); }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.edrows { display: grid; gap: 8px; margin: 10px 0; }
+.edrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 8px; border-radius: 12px; background: var(--card-2); }
+.edrow > select, .edrow > input { width: 100%; min-width: 0; background: var(--bg); border: 1.5px solid var(--line); border-radius: 9px; padding: 8px; font-size: 16px; color: var(--text); }
+.edrow > input[type="text"] { grid-column: 2 / -1; }
+.edrow > .edreps { grid-column: auto; width: 64px; }
+.edrow:has(.edreps) { grid-template-columns: 22px minmax(0, 1fr) 64px; }
+.edrow:has(.edreps) > input[type="text"] { grid-column: 2 / -1; }
+.edrow .edbtns { grid-column: 2 / -1; display: flex; gap: 4px; justify-content: flex-end; }
+.edrow .edbtns .btn { min-height: 32px; padding: 4px 10px; }
+.ednum { font-family: var(--display); font-size: 18px; color: var(--lime); text-align: center; }
+.edrow.dayrow { grid-template-columns: 74px minmax(0, 1fr); }
+.edday { font-weight: 800; font-size: 13px; }
+.edactions { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 20px; }
+.edactions .grow { flex: 1; }
+
 </style>
 
   <header class="topbar">
@@ -374,7 +406,7 @@ button.fx-badge { border: 0; }
   <main id="view" class="view"></main>
 
   <nav class="tabbar" id="tabbar">
-    <a href="#hoje" data-tab="hoje"><span class="ico">⚡</span>Hoje</a>
+    <a href="#hoje" data-tab="hoje"><span class="ico">🏠</span>Início</a>
     <a href="#calendario" data-tab="calendario"><span class="ico">📅</span>Calendário</a>
     <a href="#progresso" data-tab="progresso"><span class="ico">📈</span>Evolução</a>
     <a href="#exercicios" data-tab="exercicios"><span class="ico">🎥</span>Exercícios</a>
@@ -605,26 +637,36 @@ const CLIPS = {
 (function () {
   "use strict";
 
-  // ---------- Estado ----------
+  // ---------- Estado da pessoa ----------
+  // runs: cada sequência começada (ou treino avulso) tem seu próprio registro de dias.
   const KEY = "nsc_v1";
   const DEFAULT = {
-    settings: { start: "2026-11-01", level: "intermediate", bell: 12, sound: true },
-    logs: {},     // { [dia]: {...} }
+    settings: { level: "intermediate", bell: 12, sound: true },
+    runs: {},     // { [runId]: { kind: "program"|"single", programId, workoutId, start, logs: { [dia]: {...} }, createdAt } }
+    active: null, // runId em uso
     body: [],     // [{ date, weight, waist }]
-    videos: {},   // { [exerciseId]: url }
+    videos: {},   // { [exerciseId]: url } — link do YouTube escolhido pela pessoa
   };
+  const SHRED_ID = "shred30";
+  // Converte qualquer formato antigo (logs soltos do Shred) para o formato com sequências
+  function migrateState(raw) {
+    if (!raw || typeof raw !== "object") return JSON.parse(JSON.stringify(DEFAULT));
+    const st = {
+      settings: Object.assign({}, DEFAULT.settings, raw.settings || {}),
+      runs: JSON.parse(JSON.stringify(raw.runs || {})),
+      active: raw.active || null,
+      body: raw.body || [], videos: raw.videos || {}, updatedAt: raw.updatedAt || 0,
+    };
+    if (raw.logs && Object.keys(raw.logs).length && !st.runs.shred) {
+      st.runs.shred = { kind: "program", programId: SHRED_ID, start: (raw.settings && raw.settings.start) || "2026-11-01", logs: raw.logs, createdAt: 1 };
+    }
+    if (!st.active || !st.runs[st.active]) st.active = Object.keys(st.runs)[0] || null;
+    delete st.settings.start;
+    return st;
+  }
   let S = load();
-
   function load() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(KEY));
-      if (raw && raw.settings) {
-        return {
-          settings: Object.assign({}, DEFAULT.settings, raw.settings),
-          logs: raw.logs || {}, body: raw.body || [], videos: raw.videos || {}, updatedAt: raw.updatedAt || 0,
-        };
-      }
-    } catch (e) { /* ignora */ }
+    try { const raw = JSON.parse(localStorage.getItem(KEY)); if (raw) return migrateState(raw); } catch (e) { /* ignora */ }
     return JSON.parse(JSON.stringify(DEFAULT));
   }
   function save() {
@@ -634,9 +676,76 @@ const CLIPS = {
     updateTop();
   }
 
+  // ---------- Cadastro (exercícios, treinos, sequências) ----------
+  // Compartilhado: todos leem, só quem edita o app (Adm) altera. Padrão = November Shred.
+  const CAT_KEY = "nsc_catalog_v1";
+  function defaultCatalog() {
+    const exercises = {};
+    Object.entries(EXERCISES).forEach(([id, e]) => {
+      exercises[id] = { name: e[1], alt: e[0], q: e[2], how: (HOWTO[id] || []).slice(), youtube: "", clip: (typeof CLIPS !== "undefined" && CLIPS[id]) || "" };
+    });
+    const workouts = {};
+    WORKOUTS.forEach((w) => { const c = JSON.parse(JSON.stringify(w)); delete c.day; workouts["d" + w.day] = c; });
+    return {
+      v: 1, updatedAt: 0, exercises, workouts,
+      warmup: WARMUP.map((x) => x.slice()),
+      programs: {
+        [SHRED_ID]: {
+          name: "November Shred · 30 dias", kind: "days", days: WORKOUTS.map((w) => "d" + w.day),
+          weekly: [null, null, null, null, null, null, null], weeks: 4,
+          note: "O mesmo tipo de treino nunca cai em dias seguidos, e a cada 7 dias tem um Mobility & Core Flow mais leve para você se recuperar.",
+        },
+      },
+    };
+  }
+  function loadCatalog() {
+    try { const c = JSON.parse(localStorage.getItem(CAT_KEY)); if (c && c.exercises && c.workouts && c.programs) return c; } catch (e) {}
+    return defaultCatalog();
+  }
+  let CAT = loadCatalog();
+  const catDb = { doc: null };
+  async function saveCatalog() {
+    CAT.updatedAt = Date.now();
+    try { localStorage.setItem(CAT_KEY, JSON.stringify(CAT)); } catch (e) {}
+    activate();
+    if (!catDb.doc) return true;
+    try { await catDb.doc.set({ json: JSON.stringify(CAT), updatedAt: CAT.updatedAt }); return true; }
+    catch (e) { toast("Não consegui salvar o cadastro: " + ((e && (e.code || e.message)) || "erro")); return false; }
+  }
+  let IS_ADMIN = !(window.claude && typeof window.claude.use === "function"); // fora do claude.ai: sempre Adm
+
+  // ---------- Sequência ativa ----------
+  let RUN = null, DAYS = [], TDAYS = [], LOGS = {}, WARM = [];
+  function programDays(p, start) {
+    if (!p) return [];
+    if (p.kind === "weekly") {
+      const out = [], d0 = parseDate(start || isoDate(new Date()));
+      for (let i = 0; i < 7 * Math.max(1, +p.weeks || 1); i++) { const d = new Date(d0); d.setDate(d0.getDate() + i); out.push((p.weekly || [])[d.getDay()] || null); }
+      return out;
+    }
+    return (p.days || []).slice();
+  }
+  function runDays(r) { return !r ? [] : r.kind === "single" ? [r.workoutId] : programDays(CAT.programs[r.programId], r.start); }
+  function runName(r) {
+    if (!r) return "";
+    if (r.kind === "single") return "Avulso · " + (CAT.workouts[r.workoutId]?.name || "treino removido");
+    return CAT.programs[r.programId]?.name || "Sequência removida";
+  }
+  function activate() {
+    WARM = (CAT.warmup || []).filter(([id]) => CAT.exercises[id]);
+    RUN = S.active ? S.runs[S.active] || null : null;
+    if (RUN) { RUN.logs = RUN.logs || {}; }
+    LOGS = RUN ? RUN.logs : {};
+    DAYS = runDays(RUN);
+    TDAYS = DAYS.map((id, i) => (id && CAT.workouts[id] ? Object.assign({}, CAT.workouts[id], { id, day: i + 1 }) : null)).filter(Boolean);
+  }
+  function WD(n) { return TDAYS.find((w) => w.day === n) || null; }
+  function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  function setActive(id) { S.active = id; save(); activate(); }
+
   // ---------- Sincronização na nuvem (quando publicado no claude.ai) ----------
-  // Documento por pessoa: data/users/<id>/state (privado). Nunca substitui às cegas:
-  // dados locais e da conta são sempre JUNTADOS, para que uma tela vazia não apague nada.
+  // Progresso por pessoa: data/users/<id>/state (privado). Cadastro: catalog/main (compartilhado).
+  // Dados locais e da conta são sempre JUNTADOS, para que uma tela vazia não apague nada.
   const cloud = { doc: null, timer: null, writing: false, pending: false, status: "local", savedAt: 0, error: "" };
   function cloudSave() {
     if (!cloud.doc) return;
@@ -662,19 +771,27 @@ const CLIPS = {
     if (l.startedAt) w += 1; if (l.notes) w += 1; if (l.rpe) w += 1;
     return w;
   }
-  function mergeStates(a, b) {
+  function mergeStates(a0, b0) {
+    const a = migrateState(a0), b = migrateState(b0);
     // b = o mais recente; em empate de conteúdo, vence o mais recente
     const newer = (b.updatedAt || 0) >= (a.updatedAt || 0) ? b : a, older = newer === b ? a : b;
-    const logs = {};
-    new Set([...Object.keys(older.logs || {}), ...Object.keys(newer.logs || {})]).forEach((d) => {
-      const x = older.logs?.[d], y = newer.logs?.[d];
-      logs[d] = !x ? y : !y ? x : logWeight(x) > logWeight(y) ? x : y;
+    const runs = {};
+    new Set([...Object.keys(older.runs), ...Object.keys(newer.runs)]).forEach((id) => {
+      const x = older.runs[id], y = newer.runs[id];
+      if (!x || !y) { runs[id] = x || y; return; }
+      const logs = {};
+      new Set([...Object.keys(x.logs || {}), ...Object.keys(y.logs || {})]).forEach((d) => {
+        const lx = x.logs?.[d], ly = y.logs?.[d];
+        logs[d] = !lx ? ly : !ly ? lx : logWeight(lx) > logWeight(ly) ? lx : ly;
+      });
+      runs[id] = Object.assign({}, x, y, { logs });
     });
     const body = {};
     [...(older.body || []), ...(newer.body || [])].forEach((m) => { if (m && m.date) body[m.date] = m; });
+    const active = (newer.active && runs[newer.active]) ? newer.active : (older.active && runs[older.active]) ? older.active : Object.keys(runs)[0] || null;
     return {
       settings: Object.assign({}, DEFAULT.settings, older.settings, newer.settings),
-      logs, body: Object.values(body),
+      runs, active, body: Object.values(body),
       videos: Object.assign({}, older.videos, newer.videos),
       updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0),
     };
@@ -683,21 +800,37 @@ const CLIPS = {
     if (!window.claude || typeof window.claude.use !== "function") return;
     try {
       const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
-      if (!db || !user) { cloud.status = "sem-conta"; updateTop(); return; }
+      if (user) { try { IS_ADMIN = !!(await user.canEdit()); } catch (e) { IS_ADMIN = false; } }
+      if (!db || !user) { cloud.status = "sem-conta"; updateTop(); route(); return; }
+      // Cadastro compartilhado
+      let catChanged = false;
+      try {
+        catDb.doc = db.doc("catalog/main");
+        const cs = await catDb.doc.get();
+        const c = cs.exists ? cs.data() : null;
+        if (c && c.json) {
+          const parsed = JSON.parse(c.json);
+          if (parsed && parsed.exercises && JSON.stringify(parsed) !== JSON.stringify(CAT)) { CAT = parsed; catChanged = true; }
+          try { localStorage.setItem(CAT_KEY, JSON.stringify(CAT)); } catch (e) {}
+        }
+      } catch (e) { /* sem cadastro na nuvem: usa o padrão */ }
+      // Progresso da pessoa
       const id = await user.id();
-      if (!id) { cloud.status = "sem-conta"; updateTop(); return; }
+      if (!id) { cloud.status = "sem-conta"; activate(); updateTop(); route(); return; }
       const doc = db.doc(`data/users/${id}/state`);
       const snap = await doc.get();
       cloud.doc = doc;
       const remote = snap.exists ? snap.data() : null;
+      let changedLocal = false;
       if (remote && remote.json) {
         const r = JSON.parse(remote.json); r.updatedAt = remote.updatedAt || r.updatedAt || 0;
         const merged = mergeStates(r, S);
-        const changedLocal = JSON.stringify(merged) !== JSON.stringify(S);
+        changedLocal = JSON.stringify(merged) !== JSON.stringify(S);
         S = merged;
         try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
-        if (changedLocal) route();
       }
+      activate();
+      if (changedLocal || catChanged || IS_ADMIN) route();
       await cloudFlush();
     } catch (e) { cloud.status = "erro"; cloud.error = (e && (e.code || e.message)) || "erro"; }
     updateTop();
@@ -713,22 +846,27 @@ const CLIPS = {
 
   function parseDate(iso) { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); }
   function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
-  function dateOfDay(n) { const d = parseDate(S.settings.start); d.setDate(d.getDate() + n - 1); return d; }
+  function dateOfDay(n) { const d = parseDate(RUN ? RUN.start : isoDate(new Date())); d.setDate(d.getDate() + n - 1); return d; }
   function fmtDate(d) { return `${DOW[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; }
   function todayIndex() {
     const t = new Date(); t.setHours(0, 0, 0, 0);
-    return Math.round((t - parseDate(S.settings.start)) / 86400000) + 1; // pode ser <1 ou >30
+    return RUN ? Math.round((t - parseDate(RUN.start)) / 86400000) + 1 : 1; // pode ser <1 ou > total
   }
-  function currentDay() { return Math.min(30, Math.max(1, todayIndex())); }
+  function currentDay() { return Math.min(Math.max(1, DAYS.length), Math.max(1, todayIndex())); }
   function ytSearch(q) { return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q); }
   // Nomes exibidos em inglês (e[1]); o português (e[0]) fica só para a busca
-  function exInfo(id) { const e = EXERCISES[id]; return { id, pt: e[1], en: e[1], ptAlt: e[0], qEn: e[2], qPt: e[3] }; }
-  function getLog(n) { return S.logs[n] || null; }
-  function ensureLog(n) {
-    if (!S.logs[n]) S.logs[n] = { done: false, level: S.settings.level, bell: S.settings.bell, ex: {}, sets: {}, amrapRounds: 0, amrapReps: 0 };
-    return S.logs[n];
+  function exInfo(id) {
+    const e = CAT.exercises[id] || { name: id, alt: "", q: id };
+    return { id, pt: e.name, en: e.name, ptAlt: e.alt || "", qEn: e.q || e.name, qPt: e.q || e.name };
   }
-  const doneCount = () => WORKOUTS.filter((w) => S.logs[w.day]?.done).length;
+  function catOf(c) { return CATEGORIES[c] || CATEGORIES.full; }
+  function getLog(n) { return LOGS[n] || null; }
+  function ensureLog(n) {
+    if (!RUN) return {};
+    if (!LOGS[n]) LOGS[n] = { done: false, level: S.settings.level, bell: S.settings.bell, ex: {}, sets: {}, amrapRounds: 0, amrapReps: 0 };
+    return LOGS[n];
+  }
+  const doneCount = () => TDAYS.filter((w) => LOGS[w.day]?.done).length;
 
   function toast(msg) {
     const t = $("#toast"); t.textContent = msg; t.classList.add("show");
@@ -972,64 +1110,199 @@ const CLIPS = {
     const cut = h.search(/[-/]/);
     const name = cut < 0 ? h : h.slice(0, cut), arg = cut < 0 ? "" : h.slice(cut + 1);
     timerStop(true); closeFocus();
-    $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name || ((name === "dia" || name === "foco") && a.dataset.tab === "calendario") || (name === "exercicio" && a.dataset.tab === "exercicios")));
+    if (name !== "editar") ED = null;
+    if (!(name === "gerenciar" && arg === "aq")) WDRAFT = null;
+    const tabOf = { dia: "calendario", foco: "calendario", exercicio: "exercicios", nova: "hoje", avulso: "hoje", gerenciar: "ajustes", editar: "ajustes" };
+    $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === (tabOf[name] || name)));
     const v = $("#view");
-    if (name === "dia" || name === "foco") { v.innerHTML = viewDay(+arg); bindDay(+arg); if (name === "foco" && WORKOUTS[+arg - 1]) openFocus(+arg); }
+    if (name === "dia" || name === "foco") { v.innerHTML = viewDay(+arg); if (RUN && WD(+arg)) { bindDay(+arg); if (name === "foco") openFocus(+arg); } }
     else if (name === "calendario") v.innerHTML = viewCalendar();
-    else if (name === "progresso") { v.innerHTML = viewProgress(); bindProgress(); }
+    else if (name === "progresso") { if (!RUN) v.innerHTML = viewNoRun(); else { v.innerHTML = viewProgress(); bindProgress(); } }
     else if (name === "exercicios") { v.innerHTML = viewExercises(); bindExercises(); }
     else if (name === "exercicio") { const id = arg.replace(/-/g, "_"); v.innerHTML = viewExercise(id); }
     else if (name === "ajustes") { v.innerHTML = viewSettings(); bindSettings(); }
-    else { v.innerHTML = viewToday(); bindToday(); }
+    else if (name === "nova") { v.innerHTML = viewNew(); bindNew(); }
+    else if (name === "avulso") { v.innerHTML = viewSingle(); bindSingle(); }
+    else if (name === "gerenciar") { v.innerHTML = viewAdmin(arg); bindAdmin(arg); }
+    else if (name === "editar") { v.innerHTML = viewEditor(arg); bindEditor(); }
+    else { v.innerHTML = viewHome(); bindHome(); }
     window.scrollTo(0, 0);
     restPaint();
     updateTop();
   }
   function updateTop() {
     const ic = cloud.status === "nuvem" ? ' <span class="sync ok">☁︎ salvo</span>' : cloud.status === "erro" ? ' <span class="sync bad">⚠︎ não salvou</span>' : "";
-    $("#topProgress").innerHTML = `<b>${doneCount()}</b>/30 treinos${ic}`;
+    $("#topProgress").innerHTML = RUN ? `<b>${doneCount()}</b>/${TDAYS.length} treinos${ic}` : ic;
   }
   function syncLine() {
     if (cloud.status === "nuvem") return `<b class="lime">☁︎ Salvo na sua conta</b>${cloud.savedAt ? ` às ${hhmm(cloud.savedAt)}` : ""}. Também fica uma cópia neste aparelho.`;
+    if (cloud.status === "erro" && /invalid|denied|permission|not_granted|writer/i.test(cloud.error)) return `<b style="color:var(--danger)">⚠︎ Seu acesso a este app é só de leitura.</b> Peça a quem compartilhou para te dar acesso de quem pode <b>usar/contribuir</b>, para salvar seu progresso. Por enquanto ele fica só neste aparelho.`;
     if (cloud.status === "erro") return `<b style="color:var(--danger)">⚠︎ Não consegui salvar na sua conta</b> (${esc(cloud.error)}). Seus dados estão só neste aparelho: exporte um backup.`;
     if (cloud.status === "sem-conta") return `<b style="color:var(--danger)">⚠︎ Sem conta conectada.</b> Seus dados estão só neste aparelho: exporte um backup.`;
     return `Seus dados ficam salvos neste aparelho/navegador. Exporte um backup de vez em quando.`;
   }
 
   // ---------- Views ----------
-  function catStyle(cat) { return `--cat:${CATEGORIES[cat].color}`; }
+  function catStyle(cat) { return `--cat:${catOf(cat).color}`; }
 
-  function viewToday() {
-    const idx = todayIndex(), n = currentDay(), w = WORKOUTS[n - 1], log = getLog(n);
-    const t = target(w, S.settings.level);
+  // ---------- Início: sequências e treinos avulsos ----------
+  function runStats(r) {
+    const days = runDays(r), logs = (r && r.logs) || {};
+    let total = 0, done = 0;
+    days.forEach((id, i) => { if (id && CAT.workouts[id]) { total++; if (logs[i + 1]?.done) done++; } });
+    return { total, done, len: days.length };
+  }
+  function fmtShort(iso) { if (!iso) return ""; const d = parseDate(iso); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`; }
+  function programDesc(p) {
+    if (!p) return "";
+    if (p.kind === "weekly") {
+      const n = (p.weekly || []).filter(Boolean).length;
+      return `${n}× por semana · ${p.weeks || 1} semana${(p.weeks || 1) > 1 ? "s" : ""}`;
+    }
+    const n = (p.days || []).length, t = (p.days || []).filter(Boolean).length;
+    return `${n} dias · ${t} treinos`;
+  }
+  function runRow(id, r) {
+    const st = runStats(r), on = id === S.active;
+    const sub = r.kind === "single"
+      ? `${fmtShort(r.start)} · ${r.logs?.[1]?.done ? "✓ feito" : "não concluído"}`
+      : `Início ${fmtShort(r.start)} · ${st.done}/${st.total} treinos`;
+    return `<div class="runrow ${on ? "on" : ""}">
+      <div class="runinfo"><b>${esc(runName(r))}</b><span class="small muted">${sub}</span></div>
+      <button type="button" class="btn sm ${on ? "" : "primary"}" data-openrun="${id}">${on ? "Abrir" : "Usar"}</button>
+      <button type="button" class="btn sm ghost" data-delrun="${id}" aria-label="Remover">✕</button>
+    </div>`;
+  }
+  function todayBlock() {
+    if (!RUN) return "";
+    if (RUN.kind === "single") {
+      const w = WD(1); if (!w) return `<div class="card">Este treino foi removido do cadastro.</div>`;
+      return workoutCard(w, 1, `Treino avulso · ${fmtDate(dateOfDay(1))}`);
+    }
+    const idx = todayIndex(), N = DAYS.length, n = currentDay(), w = WD(n);
     let head;
-    if (idx < 1) head = `<div class="eyebrow">Começa em ${1 - idx} dia(s)</div><h1>Prepare-se!</h1><p class="muted">O desafio começa em ${fmtDate(dateOfDay(1))}. Dá uma olhada no primeiro treino e nos vídeos.</p>`;
-    else if (idx > 30) head = `<div class="eyebrow">Desafio encerrado</div><h1>Você chegou ao fim!</h1><p class="muted">Veja sua evolução ou refaça qualquer treino pelo calendário.</p>`;
-    else head = `<div class="eyebrow">Dia ${n} de 30 · ${fmtDate(dateOfDay(n))}</div><h1>Treino de hoje</h1>`;
-
-    const next = WORKOUTS.find((x) => !S.logs[x.day]?.done);
+    if (idx < 1) head = `<div class="eyebrow">Começa em ${1 - idx} dia(s)</div>`;
+    else if (idx > N) head = `<div class="eyebrow">Sequência encerrada · refaça qualquer dia pelo calendário</div>`;
+    else head = `<div class="eyebrow">Dia ${n} de ${N} · ${fmtDate(dateOfDay(n))}</div>`;
+    const next = TDAYS.find((x) => !LOGS[x.day]?.done);
+    const body = w ? workoutCard(w, n, "Treino de hoje")
+      : `<div class="card"><h2>Dia ${n} · Descanso</h2><p class="muted small">Recupere-se. ${next ? `Próximo treino: Dia ${next.day} · ${esc(next.name)}.` : ""}</p></div>`;
+    return `${head}<h1>${esc(runName(RUN))}</h1><div class="section"></div>${body}
+      ${next && next.day !== n ? `<a class="btn ghost block" href="#dia-${next.day}">Próximo pendente: Dia ${next.day} · ${esc(next.name)}</a>` : ""}
+      ${statsBlock()}`;
+  }
+  function workoutCard(w, n, label) {
+    const log = getLog(n), t = target(w, S.settings.level);
     return `
-      ${head}
-      <div class="section"></div>
       <a href="#dia-${n}" style="text-decoration:none;color:inherit">
         <div class="card accent" style="${catStyle(w.cat)}">
-          <div class="row"><span class="tag" style="${catStyle(w.cat)}">${esc(CATEGORIES[w.cat].label)}</span>${log?.done ? '<span class="lime small" style="font-weight:800">✓ Concluído</span>' : ""}</div>
-          <h2 style="margin-top:10px">Dia ${n} · ${esc(w.name)}</h2>
+          <div class="row"><span class="tag" style="${catStyle(w.cat)}">${esc(catOf(w.cat).label)}</span>${log?.done ? '<span class="lime small" style="font-weight:800">✓ Concluído</span>' : ""}</div>
+          <div class="eyebrow" style="margin-top:10px">${esc(label)}</div>
+          <h2>${RUN && RUN.kind !== "single" ? `Dia ${n} · ` : ""}${esc(w.name)}</h2>
           <div class="chips">${formatChips(w, t)}</div>
           <ol class="small muted" style="margin:6px 0 12px;padding-left:18px">${w.ex.map(([id]) => `<li>${esc(exInfo(id).pt)}</li>`).join("")}</ol>
           <span class="btn primary block">${log?.done ? "Ver / editar registro" : "Começar treino →"}</span>
         </div>
       </a>
-      <a class="btn ghost block" href="#foco-${n}" style="margin-bottom:8px">🎯 Treinar em modo foco</a>
-      ${next && next.day !== n ? `<a class="btn ghost block" href="#dia-${next.day}">Próximo pendente: Dia ${next.day} · ${esc(next.name)}</a>` : ""}
-      ${statsBlock()}
-      <div class="section"><h3>Antes de começar</h3></div>
-      ${warmupDay(log || {})}
+      <a class="btn ghost block" href="#foco-${n}" style="margin-bottom:8px">🎯 Treinar em modo foco</a>`;
+  }
+  function viewHome() {
+    const all = Object.entries(S.runs).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+    const seqs = all.filter(([, r]) => r.kind !== "single"), singles = all.filter(([, r]) => r.kind === "single").slice(0, 10);
+    const top = RUN ? todayBlock()
+      : `<div class="eyebrow">Bem-vindo</div><h1>Escolha seu treino</h1><p class="muted">Comece uma sequência ou faça um treino avulso.</p>`;
+    const n = RUN ? (RUN.kind === "single" ? 1 : currentDay()) : 0;
+    return `
+      ${top}
+      <div class="section"><h3>Começar</h3></div>
+      <div class="grid2"><a class="btn primary" href="#nova">＋ Sequência</a><a class="btn ghost" href="#avulso">🏋️ Treino avulso</a></div>
+      ${seqs.length ? `<div class="section"><h3>Minhas sequências</h3></div><div class="card runlist">${seqs.map(([id, r]) => runRow(id, r)).join("")}</div>` : ""}
+      ${singles.length ? `<div class="section"><h3>Treinos avulsos</h3></div><div class="card runlist">${singles.map(([id, r]) => runRow(id, r)).join("")}</div>` : ""}
+      ${RUN && WD(n) ? `<div class="section"><h3>Antes de começar</h3></div>${warmupDay(getLog(n) || {})}` : ""}
       <div class="card small">
         <b class="lime">Guia de kettlebell</b><br>
         Iniciante: 6–12 kg · Intermediário: 12–16 kg · Avançado: 16–24 kg<br>
         <span class="muted">Qualidade vence velocidade. Pare se sentir dor aguda.</span>
       </div>`;
+  }
+  function bindHome() {
+    if (RUN && WD(RUN.kind === "single" ? 1 : currentDay())) bindToday();
+    $$("[data-openrun]").forEach((b) => (b.onclick = () => {
+      const id = b.dataset.openrun, r = S.runs[id]; if (!r) return;
+      setActive(id); location.hash = r.kind === "single" ? "dia-1" : "calendario";
+    }));
+    $$("[data-delrun]").forEach((b) => (b.onclick = () => {
+      if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Remover?"; b.classList.add("danger"); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "✕"; b.classList.remove("danger"); } }, 4000); return; }
+      const id = b.dataset.delrun; delete S.runs[id];
+      if (S.active === id) S.active = Object.keys(S.runs)[0] || null;
+      save(); activate(); toast("Removido"); route();
+    }));
+  }
+  function viewNoRun() {
+    return `<div class="eyebrow">Nenhuma sequência ativa</div><h1>Escolha seu treino</h1>
+      <p class="muted">Comece uma sequência (com calendário) ou faça um treino avulso hoje.</p>
+      <div class="grid2"><a class="btn primary" href="#nova">＋ Sequência</a><a class="btn ghost" href="#avulso">🏋️ Treino avulso</a></div>`;
+  }
+
+  // Nova sequência
+  function viewNew() {
+    const progs = Object.entries(CAT.programs);
+    const today = isoDate(new Date());
+    return `<a class="btn sm ghost" href="#hoje">← Início</a><div class="section"></div>
+      <div class="eyebrow">Nova sequência</div><h1>Escolha a sequência</h1>
+      <p class="small muted">Escolha a data do Dia 1. Você pode ter várias sequências e trocar entre elas no Início.</p>
+      ${progs.length ? progs.map(([pid, p]) => {
+        const mine = Object.entries(S.runs).filter(([, r]) => r.kind !== "single" && r.programId === pid);
+        return `<div class="card">
+          <h2>${esc(p.name)}</h2>
+          <div class="small muted" style="margin:4px 0 8px">${esc(programDesc(p))}</div>
+          ${p.note ? `<p class="small" style="margin:0 0 10px">${esc(p.note)}</p>` : ""}
+          ${mine.length ? `<p class="small lime" style="margin:0 0 10px">Você já tem ${mine.length > 1 ? mine.length + " rodadas" : "esta sequência"} (${mine.map(([, r]) => { const s = runStats(r); return `${s.done}/${s.total}`; }).join(", ")}). Começar de novo cria uma rodada nova.</p>` : ""}
+          <div class="row"><label class="f grow" style="margin:0">Dia 1 em<input type="date" data-pstart="${pid}" value="${today}"></label>
+          <button type="button" class="btn primary" data-pgo="${pid}" style="align-self:flex-end">Começar</button></div>
+        </div>`;
+      }).join("") : `<div class="card muted">Nenhuma sequência cadastrada ainda.</div>`}`;
+  }
+  function bindNew() {
+    $$("[data-pgo]").forEach((b) => (b.onclick = () => {
+      const pid = b.dataset.pgo, start = $(`[data-pstart="${pid}"]`).value || isoDate(new Date());
+      const id = newId("r");
+      S.runs[id] = { kind: "program", programId: pid, start, logs: {}, createdAt: Date.now() };
+      setActive(id); toast("Sequência iniciada"); location.hash = "calendario";
+    }));
+  }
+
+  // Treino avulso
+  function viewSingle() {
+    const groups = {};
+    Object.entries(CAT.workouts).forEach(([id, w]) => { (groups[w.cat] = groups[w.cat] || []).push([id, w]); });
+    return `<a class="btn sm ghost" href="#hoje">← Início</a><div class="section"></div>
+      <div class="eyebrow">Treino avulso</div><h1>Escolha o treino</h1>
+      <input class="search" id="wSearch" type="search" placeholder="Buscar treino…">
+      ${Object.keys(CATEGORIES).filter((c) => groups[c]).map((c) => `
+        <div class="wgroup"><div class="section"><h3 style="color:${CATEGORIES[c].color}">${esc(CATEGORIES[c].label)}</h3></div>
+        <div class="card runlist">${groups[c].sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, w]) => `
+          <div class="runrow" data-wname="${esc(w.name.toLowerCase())}">
+            <div class="runinfo"><b>${esc(w.name)}</b><span class="small muted">${esc(fmtLine(w))} · ${w.ex.length} exercícios</span></div>
+            <button type="button" class="btn sm primary" data-single="${id}">Fazer</button>
+          </div>`).join("")}</div></div>`).join("")}`;
+  }
+  function fmtLine(w) {
+    if (w.type === "sets") return `${w.sets}×${w.reps} · ${w.min} min`;
+    if (w.type === "amrap") return `AMRAP ${w.amrap} · ${w.min} min`;
+    return `${w.work}s × ${w.rounds} rounds · ${w.min} min`;
+  }
+  function bindSingle() {
+    $("#wSearch").oninput = (e) => {
+      const q = e.target.value.toLowerCase();
+      $$("[data-wname]").forEach((r) => (r.hidden = !r.dataset.wname.includes(q)));
+      $$(".wgroup").forEach((g) => (g.hidden = !$$("[data-wname]", g).some((r) => !r.hidden)));
+    };
+    $$("[data-single]").forEach((b) => (b.onclick = () => {
+      const id = newId("s");
+      S.runs[id] = { kind: "single", workoutId: b.dataset.single, start: isoDate(new Date()), logs: {}, createdAt: Date.now() };
+      setActive(id); location.hash = "dia-1";
+    }));
   }
 
   function statsBlock() {
@@ -1041,18 +1314,18 @@ const CLIPS = {
         <div class="stat"><div class="v">${streak()}</div><div class="l">Sequência</div></div>
         <div class="stat"><div class="v">${totalMinutes()}</div><div class="l">Minutos</div></div>
       </div>
-      <div class="bar"><i style="width:${(d / 30) * 100}%"></i></div>`;
+      <div class="bar"><i style="width:${TDAYS.length ? (d / TDAYS.length) * 100 : 0}%"></i></div>`;
   }
   function streak() {
     // dias consecutivos concluídos terminando no último dia já liberado
-    const maxDone = Math.max(0, ...WORKOUTS.filter((w) => S.logs[w.day]?.done).map((w) => w.day));
-    let s = 0, last = Math.min(30, Math.max(0, todayIndex(), maxDone));
-    if (last >= 1 && !S.logs[last]?.done) last--; // hoje ainda pode ser feito
-    for (let d = last; d >= 1 && S.logs[d]?.done; d--) s++;
+    const maxDone = Math.max(0, ...TDAYS.filter((w) => LOGS[w.day]?.done).map((w) => w.day));
+    let s = 0, last = Math.min(DAYS.length, Math.max(0, todayIndex(), maxDone));
+    if (last >= 1 && !LOGS[last]?.done) last--; // hoje ainda pode ser feito
+    for (let d = last; d >= 1; d--) { if (!WD(d)) continue; if (LOGS[d]?.done) s++; else break; } // dias de descanso não quebram
     return s;
   }
   function totalMinutes() {
-    return WORKOUTS.reduce((a, w) => a + (S.logs[w.day]?.done ? +(S.logs[w.day].duration || w.min) : 0), 0);
+    return TDAYS.reduce((a, w) => a + (LOGS[w.day]?.done ? +(LOGS[w.day].duration || w.min) : 0), 0);
   }
 
   // Dentro do claude.ai a página não pode embutir sites externos (YouTube incluso):
@@ -1067,12 +1340,12 @@ const CLIPS = {
   }
   function warmupDay(log) {
     const wd = log.warm || [];
-    const all = WARMUP.every((_, k) => wd[k]);
+    const all = WARM.every((_, k) => wd[k]);
     return `
       <details class="card" ${all ? "" : "open"} id="warmCard">
-        <summary>🔥 Aquecimento (5 min) <span class="lime small" id="warmCount">${WARMUP.filter((_, k) => wd[k]).length}/${WARMUP.length}</span></summary>
+        <summary>🔥 Aquecimento (5 min) <span class="lime small" id="warmCount">${WARM.filter((_, k) => wd[k]).length}/${WARM.length}</span></summary>
         <p class="small muted" style="margin:8px 0 0">Kettlebell leve. Toque no ✓ ao terminar cada exercício: o descanso começa ao lado. O primeiro ✓ marca o início do treino.</p>
-        ${WARMUP.map(([id, note], k) => exRow(id, k + 1, note, "",
+        ${WARM.map(([id, note], k) => exRow(id, k + 1, note, "",
           `<div class="log side"><button type="button" class="setbox ${wd[k] ? "on" : ""}" data-warm="${k}" aria-label="Feito">✓</button><button type="button" class="restpill" data-rest="w${k}" hidden></button></div>`)).join("")}
       </details>`;
   }
@@ -1081,7 +1354,7 @@ const CLIPS = {
     return `<div class="vidwrap" data-vw="${id}">${videoInner(id)}</div>`;
   }
   function videoInner(id) {
-    const e = exInfo(id), vid = ytId(S.videos[id]);
+    const e = exInfo(id), vid = ytId(videoOf(id));
     const mine = vid
       ? (CAN_EMBED
           ? `<button type="button" class="vbtn yt" data-play="${id}">▶ YouTube</button>`
@@ -1105,10 +1378,11 @@ const CLIPS = {
       </div>`;
   }
   // Vídeos de demonstração enviados (tocam dentro do app)
-  function clipOf(id) { return (typeof CLIPS !== "undefined" && CLIPS[id]) || null; }
+  function clipOf(id) { return (CAT.exercises[id] && CAT.exercises[id].clip) || null; }
   function clipTag(id, cls) {
     return `<video class="${cls || "clip"}" src="${esc(clipOf(id))}" muted autoplay loop playsinline preload="auto" aria-label="Demonstração: ${esc(exInfo(id).pt)}"></video>`;
   }
+  function videoOf(id) { return S.videos[id] || (CAT.exercises[id] && CAT.exercises[id].youtube) || ""; }
   function refreshVideos(id) { $$(`[data-vw="${id}"]`).forEach((el) => (el.innerHTML = videoInner(id))); }
   function onVideoClick(ev) {
     const b = ev.target.closest("[data-clip],[data-play],[data-paste],[data-pastesave],[data-pastedel],[data-pastecancel]");
@@ -1123,7 +1397,7 @@ const CLIPS = {
     if (b.dataset.play) {
       player.dataset.kind = "yt";
       if (!player.hidden) { player.hidden = true; player.innerHTML = ""; b.textContent = "▶ YouTube"; return; }
-      const vid = ytId(S.videos[id]);
+      const vid = ytId(videoOf(id));
       player.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&autoplay=1" title="${esc(exInfo(id).pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
       player.hidden = false; b.textContent = "✕ Fechar";
     } else if (b.dataset.paste) {
@@ -1159,34 +1433,45 @@ const CLIPS = {
   }
 
   function viewCalendar() {
-    const first = dateOfDay(1).getDay();
-    const today = todayIndex();
-    let cells = DOW.map((d) => `<div class="dow">${d}</div>`).join("");
-    for (let i = 0; i < first; i++) cells += "<div></div>";
-    WORKOUTS.forEach((w) => {
-      const cls = [S.logs[w.day]?.done ? "done" : "", w.day === today ? "today" : ""].join(" ");
-      cells += `<a href="#dia-${w.day}" class="${cls}" style="${catStyle(w.cat)}"><span class="n">${w.day}</span><span class="t">${esc(w.name)}</span></a>`;
-    });
-    const legend = Object.values(CATEGORIES).map((c) => `<span style="--c:${c.color}">${esc(c.label)}</span>`).join("");
-    const list = WORKOUTS.map((w) => `
+    if (!RUN) return viewNoRun();
+    const N = DAYS.length, today = todayIndex(), single = RUN.kind === "single";
+    let cells = "";
+    if (!single) {
+      cells = DOW.map((d) => `<div class="dow">${d}</div>`).join("");
+      for (let i = 0; i < dateOfDay(1).getDay(); i++) cells += "<div></div>";
+      for (let n = 1; n <= N; n++) {
+        const w = WD(n);
+        if (!w) { cells += `<span class="restday ${n === today ? "today" : ""}"><span class="n">${n}</span><span class="t">Descanso</span></span>`; continue; }
+        const cls = [LOGS[n]?.done ? "done" : "", n === today ? "today" : ""].join(" ");
+        cells += `<a href="#dia-${n}" class="${cls}" style="${catStyle(w.cat)}"><span class="n">${n}</span><span class="t">${esc(w.name)}</span></a>`;
+      }
+    }
+    const used = [...new Set(TDAYS.map((w) => w.cat))];
+    const legend = used.map((c) => `<span style="--c:${catOf(c).color}">${esc(catOf(c).label)}</span>`).join("");
+    const list = TDAYS.map((w) => `
       <a href="#dia-${w.day}" style="${catStyle(w.cat)}">
         <span class="num">${w.day}</span>
-        <span><b>${esc(w.name)}</b><br><span class="small muted">${fmtDate(dateOfDay(w.day))} · ${esc(CATEGORIES[w.cat].label)} · ${w.min} min</span></span>
-        <span class="check">${S.logs[w.day]?.done ? "✓" : ""}</span>
+        <span><b>${esc(w.name)}</b><br><span class="small muted">${fmtDate(dateOfDay(w.day))} · ${esc(catOf(w.cat).label)} · ${w.min} min</span></span>
+        <span class="check">${LOGS[w.day]?.done ? "✓" : ""}</span>
       </a>`).join("");
+    const p = CAT.programs[RUN.programId];
     return `
-      <div class="eyebrow">Seu mês</div><h1>Calendário <span class="lime">30 dias</span></h1>
-      <div class="section"></div>
-      <div class="cal">${cells}</div>
-      <div class="legend">${legend}</div>
-      <div class="card small" style="margin-top:14px"><b class="lime">A regra:</b> o mesmo tipo de treino nunca cai em dias seguidos, e a cada 7 dias tem um Mobility & Core Flow mais leve para você se recuperar.</div>
-      <div class="section"><h3>Todos os treinos</h3></div>
-      <div class="wlist">${list}</div>`;
+      <div class="row" style="justify-content:space-between"><div class="eyebrow" style="margin:0">${single ? "Treino avulso" : `Sequência · ${N} dias`}</div><a class="btn sm ghost" href="#hoje">Trocar</a></div>
+      <h1>${esc(runName(RUN))}</h1>
+      ${single ? "" : `<div class="section"></div><div class="cal">${cells}</div><div class="legend">${legend}</div>`}
+      ${p && p.note && !single ? `<div class="card small" style="margin-top:14px">${esc(p.note)}</div>` : ""}
+      <div class="section"><h3>${single ? "Treino" : "Todos os treinos"}</h3></div>
+      <div class="wlist">${list || '<p class="muted">Nenhum treino nesta sequência.</p>'}</div>`;
   }
 
   function viewDay(n) {
-    const w = WORKOUTS[n - 1];
-    if (!w) return `<p>Dia inválido.</p>`;
+    if (!RUN) return viewNoRun();
+    const w = WD(n);
+    if (!w) {
+      if (n < 1 || n > DAYS.length) return `<p>Dia inválido.</p>`;
+      return `<div class="row" style="justify-content:space-between;margin-bottom:10px">${n > 1 ? `<a class="btn sm ghost" href="#dia-${n - 1}">← Dia ${n - 1}</a>` : "<span></span>"}${n < DAYS.length ? `<a class="btn sm ghost" href="#dia-${n + 1}">Dia ${n + 1} →</a>` : "<span></span>"}</div>
+        <div class="card"><div class="eyebrow">Dia ${n} · ${fmtDate(dateOfDay(n))}</div><h1>Descanso</h1><p class="muted">Dia livre nesta sequência. Recupere-se para o próximo treino.</p></div>`;
+    }
     const log = getLog(n) || {};
     const level = log.level || S.settings.level;
     const t = target(w, level);
@@ -1207,17 +1492,18 @@ const CLIPS = {
       return exRow(id, i + 1, note, tgt, extra);
     }).join("");
 
-    const prev = n > 1 ? `<a class="btn sm ghost" href="#dia-${n - 1}">← Dia ${n - 1}</a>` : "<span></span>";
-    const nxt = n < 30 ? `<a class="btn sm ghost" href="#dia-${n + 1}">Dia ${n + 1} →</a>` : "<span></span>";
+    const single = RUN.kind === "single";
+    const prev = !single && n > 1 ? `<a class="btn sm ghost" href="#dia-${n - 1}">← Dia ${n - 1}</a>` : `<a class="btn sm ghost" href="#hoje">← Início</a>`;
+    const nxt = !single && n < DAYS.length ? `<a class="btn sm ghost" href="#dia-${n + 1}">Dia ${n + 1} →</a>` : "<span></span>";
 
     return `
       <div class="row" style="justify-content:space-between;margin-bottom:10px">${prev}${nxt}</div>
       <div class="card accent" style="${catStyle(w.cat)}">
         <div class="row" style="justify-content:space-between">
-          <span class="tag" style="${catStyle(w.cat)}">${esc(CATEGORIES[w.cat].label)}</span>
+          <span class="tag" style="${catStyle(w.cat)}">${esc(catOf(w.cat).label)}</span>
           <span class="small muted">${fmtDate(dateOfDay(n))}</span>
         </div>
-        <div class="eyebrow" style="margin-top:12px">Dia ${n}</div>
+        <div class="eyebrow" style="margin-top:12px">${single ? "Treino avulso" : `${esc(runName(RUN))} · Dia ${n}`}</div>
         <h1>${esc(w.name)}</h1>
         <div class="chips">${formatChips(w, t)}</div>
         <p class="small muted" style="margin:6px 0 10px">${esc(description(w, t))}</p>
@@ -1256,9 +1542,9 @@ const CLIPS = {
 
   // ---------- Diário de bordo ----------
   function diaryEntries(n) {
-    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    const w = WD(n), l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
     const out = [];
-    WARMUP.forEach(([id, note], k) => {
+    WARM.forEach(([id, note], k) => {
       const at = l.warmAt?.[k];
       out.push({ key: "w" + k, title: `Aquecimento ${k + 1} - ${exInfo(id).pt}`, id, note,
         lines: [{ label: "Feito", at, done: !!l.warm?.[k] }] });
@@ -1293,7 +1579,7 @@ const CLIPS = {
     return head + items + rnd;
   }
   function diaryText(n) {
-    const w = WORKOUTS[n - 1], { out, rounds, l } = diaryEntries(n);
+    const w = WD(n), { out, rounds, l } = diaryEntries(n);
     const ln = (x) => `${x.label} > ${x.at ? hhmm(x.at) : x.done ? "(sem horário)" : "—"}`;
     const parts = [`DIA ${n} - ${w.name} (${fmtDate(dateOfDay(n))})`];
     if (l.startedAt) parts.push(`Início ${hhmm(l.startedAt)}${l.endedAt ? ` · Fim ${hhmm(l.endedAt)}` : ""}`);
@@ -1395,7 +1681,7 @@ const CLIPS = {
     return true;
   }
   function bindWarm(n, onStart) {
-    const w = WORKOUTS[n - 1];
+    const w = WD(n);
     $$("[data-warm]").forEach((b) => (b.onclick = () => {
       const k = +b.dataset.warm, l = ensureLog(n); l.warm = l.warm || [];
       l.warm[k] = !l.warm[k];
@@ -1403,16 +1689,16 @@ const CLIPS = {
       if (l.warm[k]) l.warmAt[k] = Date.now(); else delete l.warmAt[k];
       save(); renderDiary(n);
       b.classList.toggle("on", !!l.warm[k]);
-      $("#warmCount").textContent = `${WARMUP.filter((_, j) => l.warm[j]).length}/${WARMUP.length}`;
+      $("#warmCount").textContent = `${WARM.filter((_, j) => l.warm[j]).length}/${WARM.length}`;
       if (l.warm[k]) { onStart(); restStart("w" + k, restOf(w)); }
       else if (R.key === "w" + k) restStop();
     }));
     $$("[data-rest]").forEach((p) => (p.onclick = () => { if (p.classList.contains("go")) { R.key = null; restPaint(); return; } restToggle(); }));
   }
-  function bindToday() { bindWarm(currentDay(), () => startWorkoutClock(currentDay())); }
+  function bindToday() { const n = RUN && RUN.kind === "single" ? 1 : currentDay(); bindWarm(n, () => startWorkoutClock(n)); }
 
   function bindDay(n) {
-    const w = WORKOUTS[n - 1]; if (!w) return;
+    const w = WD(n); if (!w) return;
     const log = () => ensureLog(n);
     const level = () => (getLog(n)?.level) || S.settings.level;
     const t = () => target(w, level());
@@ -1536,7 +1822,7 @@ const CLIPS = {
     const doneBtn = $("#doneBtn");
     if (doneBtn) doneBtn.onclick = () => {
       const l = collect(); l.done = true; l.completedAt = isoDate(new Date()); save();
-      toast(doneCount() === 30 ? "🏆 30 DIAS CONCLUÍDOS!" : `Dia ${n} concluído! 🔥`); route();
+      toast(doneCount() === TDAYS.length && TDAYS.length > 1 ? "🏆 SEQUÊNCIA CONCLUÍDA!" : `${RUN.kind === "single" ? "Treino" : "Dia " + n} concluído! 🔥`); route();
     };
     const saveBtn = $("#saveBtn");
     if (saveBtn) saveBtn.onclick = () => { collect(); save(); toast("Salvo"); };
@@ -1548,28 +1834,28 @@ const CLIPS = {
   // ---------- Modo foco ----------
   const F = { open: false, n: 0, idx: 0, amrapIdx: 0, iv: null, vidFor: null };
   function focusItems(n) {
-    const w = WORKOUTS[n - 1];
+    const w = WD(n);
     return [
-      ...WARMUP.map(([id, note], k) => ({ kind: "warm", k, id, note, sub: note })),
+      ...WARM.map(([id, note], k) => ({ kind: "warm", k, id, note, sub: note })),
       ...w.ex.map(([id, note, reps], i) => ({ kind: "ex", i, id, note, reps })),
     ];
   }
   function fxSetsDone(n, i) { const l = getLog(n) || {}; return ((l.sets && l.sets[i]) || []); }
   function fxItemDone(n, it) {
-    const w = WORKOUTS[n - 1], l = getLog(n) || {};
+    const w = WD(n), l = getLog(n) || {};
     if (it.kind === "warm") return !!(l.warm && l.warm[it.k]);
     if (w.type === "sets") { const t = target(w, l.level || S.settings.level), d = fxSetsDone(n, it.i); return Array.from({ length: t.sets }, (_, s) => !!d[s]).every(Boolean); }
     return false;
   }
   function fxSub(n, it) {
-    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    const w = WD(n), l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
     if (it.kind === "warm") return it.note;
     if (w.type === "sets") return `${t.sets} × ${t.reps}${it.note ? " · " + it.note : ""}`;
     if (w.type === "amrap") return `x${it.reps + t.plus}${it.note ? " · " + it.note : ""}`;
     return `${w.work}s${it.note ? " · " + it.note : ""}`;
   }
   function openFocus(n) {
-    const w = WORKOUTS[n - 1]; if (!w) return;
+    const w = WD(n); if (!w) return;
     closeFocus();
     Object.assign(F, { open: true, n, amrapIdx: 0, vidFor: null });
     const items = focusItems(n);
@@ -1580,7 +1866,7 @@ const CLIPS = {
     el.innerHTML = `
       <div class="fx-top">
         <button type="button" class="fx-icon" id="fxClose" aria-label="Sair do modo foco">✕</button>
-        <div class="fx-title">Dia ${n} · ${esc(w.name)}</div>
+        <div class="fx-title">${RUN && RUN.kind === "single" ? "" : `Dia ${n} · `}${esc(w.name)}</div>
         <div class="fx-count" id="fxCount"></div>
       </div>
       <div class="fx-body">
@@ -1648,7 +1934,7 @@ const CLIPS = {
   }
   function fxTimerStarted() { const seg = T.segs[T.i]; return !!seg && (T.running || T.remain < seg.secs * 1000); }
   function fxMain() {
-    const n = F.n, w = WORKOUTS[n - 1], items = focusItems(n), it = items[F.idx], l = getLog(n) || {};
+    const n = F.n, w = WD(n), items = focusItems(n), it = items[F.idx], l = getLog(n) || {};
     if (!it) return;
     const next = () => { F.idx = Math.min(items.length - 1, F.idx + 1); };
     if (it.kind === "warm") {
@@ -1670,15 +1956,15 @@ const CLIPS = {
         F.amrapIdx++;
         if (F.amrapIdx >= w.ex.length) { F.amrapIdx = 0; $('[data-round="1"]')?.click(); }
       }
-      F.idx = WARMUP.length + F.amrapIdx;
+      F.idx = WARM.length + F.amrapIdx;
     }
     fxRender(true);
   }
   function fxRender(full) {
     if (!F.open || !$("#focus")) return;
-    const n = F.n, w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level), items = focusItems(n);
+    const n = F.n, w = WD(n), l = getLog(n) || {}, t = target(w, l.level || S.settings.level), items = focusItems(n);
     // no intervalado em andamento, o destaque segue o timer
-    if (w.type === "interval" && fxTimerStarted()) { const seg = T.segs[T.i]; if (seg && seg.exIdx != null) { const ni = WARMUP.length + seg.exIdx; if (ni !== F.idx) { F.idx = ni; full = true; } } }
+    if (w.type === "interval" && fxTimerStarted()) { const seg = T.segs[T.i]; if (seg && seg.exIdx != null) { const ni = WARM.length + seg.exIdx; if (ni !== F.idx) { F.idx = ni; full = true; } } }
     const it = items[F.idx];
     // Timer (só aparece quando há contagem)
     const C = 2 * Math.PI * 52;
@@ -1716,7 +2002,7 @@ const CLIPS = {
     if (!full) {
       const tabs = $$("#fxTabs [data-sec] span"), its = focusItems(n);
       if (tabs.length === 2) {
-        tabs[0].textContent = `${its.filter((x) => x.kind === "warm" && fxItemDone(n, x)).length}/${WARMUP.length}`;
+        tabs[0].textContent = `${its.filter((x) => x.kind === "warm" && fxItemDone(n, x)).length}/${WARM.length}`;
         if (w.type === "sets") tabs[1].textContent = `${its.filter((x) => x.kind === "ex" && fxItemDone(n, x)).length}/${its.filter((x) => x.kind === "ex").length}`;
       }
       $$("#fxList [data-fx]").forEach((b) => { const x = items[+b.dataset.fx]; b.classList.toggle("done", fxItemDone(n, x)); b.classList.toggle("on", +b.dataset.fx === F.idx); });
@@ -1724,13 +2010,13 @@ const CLIPS = {
       return;
     }
     if (!it) return;
-    const e = exInfo(it.id), how = HOWTO[it.id] || [];
+    const e = exInfo(it.id), how = (CAT.exercises[it.id] && CAT.exercises[it.id].how) || [];
     $("#fxName").textContent = e.pt;
     $("#fxTarget").textContent = fxTargetText(n, it);
     const steps = how.filter((x) => !/^Atenção:/.test(x)), warn = how.find((x) => /^Atenção:/.test(x));
     $("#fxHow").innerHTML = steps.map((x) => `<li>${esc(x)}</li>`).join("");
     $("#fxWarn").innerHTML = warn ? `⚠️ <b>Atenção:</b> ${esc(warn.replace(/^Atenção:\s*/, ""))}` : "";
-    const vid = ytId(S.videos[it.id]), clip = clipOf(it.id);
+    const vid = ytId(videoOf(it.id)), clip = clipOf(it.id);
     $("#fxVid").innerHTML = vid
       ? `<a class="fx-pill yt" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ YouTube</a>`
       : clip ? "" : `<a class="fx-pill" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">🔎 Vídeo</a>`;
@@ -1759,8 +2045,8 @@ const CLIPS = {
     const warmDone = items.filter((x) => x.kind === "warm" && fxItemDone(n, x)).length;
     const exItems = items.filter((x) => x.kind === "ex"), exDone = exItems.filter((x) => fxItemDone(n, x)).length;
     $("#fxTabs").innerHTML = `
-      <button type="button" data-sec="warm" class="${F.sec === "warm" ? "on" : ""}">Aquecimento <span>${warmDone}/${WARMUP.length}</span></button>
-      <button type="button" data-sec="ex" class="${F.sec === "ex" ? "on" : ""}">Treino <span>${WORKOUTS[n - 1].type === "sets" ? `${exDone}/${exItems.length}` : exItems.length}</span></button>`;
+      <button type="button" data-sec="warm" class="${F.sec === "warm" ? "on" : ""}">Aquecimento <span>${warmDone}/${WARM.length}</span></button>
+      <button type="button" data-sec="ex" class="${F.sec === "ex" ? "on" : ""}">Treino <span>${WD(n).type === "sets" ? `${exDone}/${exItems.length}` : exItems.length}</span></button>`;
     $("#fxList").innerHTML = items.map((x, j) => {
       if (x.kind !== F.sec) return "";
       const lab = x.kind === "warm" ? `A${x.k + 1}` : String(x.i + 1).padStart(2, "0");
@@ -1771,7 +2057,7 @@ const CLIPS = {
   // Canto superior esquerdo: o que fazer (uma vez só)
   function fxTargetText(n, it) {
     if (!it) return "";
-    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    const w = WD(n), l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
     if (it.kind === "warm") return it.note;
     if (w.type === "sets") return `${t.reps} reps${it.note ? " · " + it.note : ""}`;
     if (w.type === "amrap") return `x${it.reps + t.plus}${it.note ? " " + it.note : ""}`;
@@ -1780,7 +2066,7 @@ const CLIPS = {
   // Canto inferior esquerdo: progresso (séries / rounds / feito)
   function fxProgressHtml(n, it) {
     if (!it) return "";
-    const w = WORKOUTS[n - 1], l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
+    const w = WD(n), l = getLog(n) || {}, t = target(w, l.level || S.settings.level);
     if (it.kind === "warm") return fxItemDone(n, it) ? `<button type="button" class="fx-badge on" data-undowarm="${it.k}" aria-label="Desmarcar ${esc(exInfo(it.id).en)}">✓ Feito</button>` : "";
     if (w.type === "sets") {
       const d = fxSetsDone(n, it.i);
@@ -1826,8 +2112,8 @@ const CLIPS = {
 
   function exerciseHistory(id) {
     const out = [];
-    WORKOUTS.forEach((w) => {
-      const l = S.logs[w.day]; if (!l) return;
+    TDAYS.forEach((w) => {
+      const l = LOGS[w.day]; if (!l) return;
       w.ex.forEach(([eid, , r], i) => {
         if (eid !== id) return;
         let reps = l.ex?.[i];
@@ -1840,24 +2126,24 @@ const CLIPS = {
   }
 
   function viewProgress() {
-    const done = WORKOUTS.filter((w) => S.logs[w.day]?.done);
-    const amraps = WORKOUTS.filter((w) => w.type === "amrap" && S.logs[w.day]?.done)
-      .map((w) => ({ label: "D" + w.day, y: (S.logs[w.day].amrapRounds || 0) + (S.logs[w.day].amrapReps ? 0.1 * Math.min(9, S.logs[w.day].amrapReps) : 0) }));
-    const amrapTable = WORKOUTS.filter((w) => w.type === "amrap").map((w) => {
-      const l = S.logs[w.day];
+    const done = TDAYS.filter((w) => LOGS[w.day]?.done);
+    const amraps = TDAYS.filter((w) => w.type === "amrap" && LOGS[w.day]?.done)
+      .map((w) => ({ label: "D" + w.day, y: (LOGS[w.day].amrapRounds || 0) + (LOGS[w.day].amrapReps ? 0.1 * Math.min(9, LOGS[w.day].amrapReps) : 0) }));
+    const amrapTable = TDAYS.filter((w) => w.type === "amrap").map((w) => {
+      const l = LOGS[w.day];
       return `<tr><td><a href="#dia-${w.day}">Dia ${w.day}</a></td><td>${w.amrap} min</td><td>${l?.done ? `<b class="lime">${l.amrapRounds || 0}</b>${l.amrapReps ? ` + ${l.amrapReps} reps` : ""}` : "—"}</td><td>${l?.done && l.bell != null ? l.bell + " kg" : "—"}</td></tr>`;
     }).join("");
-    const bells = done.filter((w) => S.logs[w.day].bell != null).map((w) => ({ label: "D" + w.day, y: +S.logs[w.day].bell }));
-    const rpes = done.filter((w) => S.logs[w.day].rpe).map((w) => ({ label: "D" + w.day, y: S.logs[w.day].rpe }));
+    const bells = done.filter((w) => LOGS[w.day].bell != null).map((w) => ({ label: "D" + w.day, y: +LOGS[w.day].bell }));
+    const rpes = done.filter((w) => LOGS[w.day].rpe).map((w) => ({ label: "D" + w.day, y: LOGS[w.day].rpe }));
 
     // Por categoria
     const byCat = Object.entries(CATEGORIES).map(([k, c]) => {
-      const all = WORKOUTS.filter((w) => w.cat === k), d = all.filter((w) => S.logs[w.day]?.done).length;
+      const all = TDAYS.filter((w) => w.cat === k), d = all.filter((w) => LOGS[w.day]?.done).length;
       return `<div style="margin:8px 0"><div class="row small" style="justify-content:space-between"><span>${esc(c.label)}</span><span class="muted">${d}/${all.length}</span></div><div class="bar" style="margin-top:4px"><i style="width:${(d / all.length) * 100}%;background:${c.color}"></i></div></div>`;
     }).join("");
 
     // Recordes por exercício
-    const recs = Object.keys(EXERCISES).map((id) => {
+    const recs = Object.keys(CAT.exercises).map((id) => {
       const h = exerciseHistory(id).filter((x) => x.reps != null && x.type !== "amrap");
       if (!h.length) return null;
       const best = h.reduce((a, b) => ((b.bell || 0) > (a.bell || 0) || ((b.bell || 0) === (a.bell || 0) && b.reps > a.reps) ? b : a));
@@ -1926,9 +2212,9 @@ const CLIPS = {
   }
 
   // ---------- Exercícios ----------
-  function usedIn(id) { return WORKOUTS.filter((w) => w.ex.some(([e]) => e === id)).map((w) => w.day); }
+  function usedIn(id) { return TDAYS.filter((w) => w.ex.some(([e]) => e === id)).map((w) => w.day); }
   function viewExercises() {
-    const ids = Object.keys(EXERCISES).sort((a, b) => exInfo(a).en.localeCompare(exInfo(b).en, "en"));
+    const ids = Object.keys(CAT.exercises).sort((a, b) => exInfo(a).en.localeCompare(exInfo(b).en, "en"));
     return `
       <div class="eyebrow">Biblioteca</div><h1>Exercícios <span class="lime">& vídeos</span></h1>
       <p class="small muted">${ids.length} movimentos do desafio. Toque em ▶ para ver a execução no YouTube. Achou um vídeo bom? Abra o exercício e fixe o link com ★.</p>
@@ -1944,7 +2230,7 @@ const CLIPS = {
     };
   }
   function viewExercise(id) {
-    if (!EXERCISES[id]) return `<p>Exercício não encontrado.</p>`;
+    if (!CAT.exercises[id]) return `<p>Exercício não encontrado.</p>`;
     const e = exInfo(id), h = exerciseHistory(id), days = usedIn(id);
     const pts = h.filter((x) => x.reps != null && x.type !== "amrap").map((x) => ({ label: "D" + x.day, y: x.reps }));
     return `
@@ -1958,7 +2244,7 @@ const CLIPS = {
       </div>
       <div class="card">
         <h3>Aparece nos dias</h3>
-        <div class="chips">${days.map((d) => `<a class="chip" href="#dia-${d}" style="text-decoration:none">Dia ${d} · ${esc(WORKOUTS[d - 1].name)}</a>`).join("") || '<span class="muted small">Aquecimento</span>'}</div>
+        <div class="chips">${days.map((d) => `<a class="chip" href="#dia-${d}" style="text-decoration:none">Dia ${d} · ${esc(WD(d).name)}</a>`).join("") || '<span class="muted small">Aquecimento</span>'}</div>
       </div>
       <div class="card">
         <h3>Seu histórico</h3>
@@ -1974,7 +2260,7 @@ const CLIPS = {
       <div class="eyebrow">Configuração</div><h1>Ajustes</h1>
       <div class="section"></div>
       <div class="card">
-        <label class="f">Data de início (Dia 1)<input type="date" id="sStart" value="${esc(st.start)}"></label>
+        ${RUN && RUN.kind !== "single" ? `<label class="f">Dia 1 da sequência "${esc(runName(RUN))}"<input type="date" id="sStart" value="${esc(RUN.start)}"></label>` : ""}
         <label class="f">Nível padrão</label>
         <div class="seg" id="sLevel">${Object.entries(LEVELS).map(([k, v]) => `<button data-level="${k}" class="${k === st.level ? "on" : ""}">${v}</button>`).join("")}</div>
         <div style="height:12px"></div>
@@ -1982,6 +2268,11 @@ const CLIPS = {
         <div class="row"><label class="f grow" style="display:flex;align-items:center;gap:10px;margin:0"><input type="checkbox" id="sSound" ${st.sound ? "checked" : ""} style="width:22px;height:22px;margin:0"> Sons do timer</label><button type="button" class="btn sm" id="sTest">🔊 Testar alarme</button></div>
         <p class="small muted">No iPhone, deixe o volume de mídia alto. O alarme do fim do descanso também vibra (Android).</p>
       </div>
+      ${IS_ADMIN ? `<div class="card">
+        <h3>🛠 Adm</h3>
+        <p class="small muted">Cadastre e edite sequências, treinos, exercícios (com vídeos) e o aquecimento. Vale para todos que usam o app.</p>
+        <a class="btn primary block" href="#gerenciar">Gerenciar cadastros</a>
+      </div>` : ""}
       <div class="card">
         <h3>Backup</h3>
         <p class="small">${syncLine()}</p>
@@ -1999,10 +2290,10 @@ const CLIPS = {
         <h3>Zerar dados</h3>
         <button class="btn danger" id="reset">Apagar todo o progresso</button>
       </div>
-      <p class="small muted">Treino: November Shred Challenge (@trainwithpb_). Aqueça antes, hidrate-se e pare se algo parecer errado. Em caso de problemas de saúde, consulte um médico.</p>`;
+      <p class="small muted">Programa padrão: November Shred Challenge (@trainwithpb_). Aqueça antes, hidrate-se e pare se algo parecer errado. Em caso de problemas de saúde, consulte um médico.</p>`;
   }
   function bindSettings() {
-    $("#sStart").onchange = (e) => { if (e.target.value) { S.settings.start = e.target.value; save(); toast("Data atualizada"); } };
+    const ss = $("#sStart"); if (ss) ss.onchange = (e) => { if (e.target.value && RUN) { RUN.start = e.target.value; save(); activate(); toast("Data atualizada"); } };
     $$("#sLevel button").forEach((b) => (b.onclick = () => { S.settings.level = b.dataset.level; save(); $$("#sLevel button").forEach((x) => x.classList.toggle("on", x === b)); }));
     $("#sBell").onchange = (e) => { S.settings.bell = +e.target.value || 0; save(); };
     $("#sSound").onchange = (e) => { S.settings.sound = e.target.checked; save(); };
@@ -2022,14 +2313,286 @@ const CLIPS = {
       const f = e.target.files[0]; if (!f) return;
       try {
         const data = JSON.parse(await f.text());
-        if (!data.settings || !data.logs) throw new Error();
-        S = mergeStates({ settings: data.settings, logs: data.logs, body: data.body || [], videos: data.videos || {}, updatedAt: data.updatedAt || 0 }, S);
+        if (!data.settings || !(data.logs || data.runs)) throw new Error();
+        S = mergeStates(data, S); activate();
         e.target.value = "";
         save(); toast("Backup importado"); route();
       } catch (err) { toast("Arquivo inválido"); }
     };
-    armConfirm($("#reset"), "Toque de novo para apagar tudo", () => { S = JSON.parse(JSON.stringify(DEFAULT)); save(); toast("Dados apagados"); route(); });
+    armConfirm($("#reset"), "Toque de novo para apagar tudo", () => { S = JSON.parse(JSON.stringify(DEFAULT)); save(); activate(); toast("Dados apagados"); route(); });
   }
+
+  // ---------- Adm: gerenciar cadastros ----------
+  const TYPES = { sets: "Séries × repetições", amrap: "AMRAP (máximo de rounds)", interval: "Intervalado (tempo por exercício)" };
+  const DOW_FULL = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+  const enc = (id) => String(id).replace(/_/g, "-"), dec = (s) => String(s).replace(/-/g, "_");
+  function adminOnly() {
+    return `<a class="btn sm ghost" href="#ajustes">← Ajustes</a><div class="section"></div>
+      <h1>Gerenciar</h1><div class="card muted">Só quem edita o app pode alterar os cadastros.</div>`;
+  }
+  function exOptions(sel) {
+    return Object.entries(CAT.exercises).sort((a, b) => a[1].name.localeCompare(b[1].name))
+      .map(([id, e]) => `<option value="${id}" ${id === sel ? "selected" : ""}>${esc(e.name)}</option>`).join("");
+  }
+  function wkOptions(sel) {
+    const groups = {};
+    Object.entries(CAT.workouts).forEach(([id, w]) => { (groups[w.cat] = groups[w.cat] || []).push([id, w]); });
+    return `<option value="" ${!sel ? "selected" : ""}>— Descanso —</option>` + Object.keys(CATEGORIES).filter((c) => groups[c]).map((c) =>
+      `<optgroup label="${esc(CATEGORIES[c].label)}">${groups[c].sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, w]) => `<option value="${id}" ${id === sel ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</optgroup>`).join("");
+  }
+  function workoutUsage(id) { return Object.values(CAT.programs).filter((p) => (p.days || []).includes(id) || (p.weekly || []).includes(id)).map((p) => p.name); }
+  function exerciseUsage(id) {
+    const ws = Object.values(CAT.workouts).filter((w) => w.ex.some(([e]) => e === id)).map((w) => w.name);
+    if ((CAT.warmup || []).some(([e]) => e === id)) ws.push("Aquecimento");
+    return ws;
+  }
+
+  function viewAdmin(tab) {
+    if (!IS_ADMIN) return adminOnly();
+    tab = tab || "seq";
+    const tabs = [["seq", "Sequências"], ["tr", "Treinos"], ["ex", "Exercícios"], ["aq", "Aquecimento"]];
+    let body = "";
+    if (tab === "seq") {
+      body = `<a class="btn primary block" href="#editar-seq-novo">＋ Nova sequência</a><div class="card runlist" style="margin-top:10px">${Object.entries(CAT.programs).map(([id, p]) => `
+        <div class="runrow"><div class="runinfo"><b>${esc(p.name)}</b><span class="small muted">${esc(programDesc(p))}</span></div>
+        <a class="btn sm" href="#editar-seq-${enc(id)}">Editar</a></div>`).join("") || '<div class="muted">Nenhuma.</div>'}</div>`;
+    } else if (tab === "tr") {
+      const groups = {};
+      Object.entries(CAT.workouts).forEach(([id, w]) => { (groups[w.cat] = groups[w.cat] || []).push([id, w]); });
+      body = `<a class="btn primary block" href="#editar-tr-novo">＋ Novo treino</a>
+        <input class="search" id="admSearch" type="search" placeholder="Buscar treino…" style="margin-top:10px">
+        ${Object.keys(CATEGORIES).filter((c) => groups[c]).map((c) => `<div class="wgroup"><div class="section"><h3 style="color:${CATEGORIES[c].color}">${esc(CATEGORIES[c].label)}</h3></div><div class="card runlist">${groups[c].sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, w]) => `
+          <div class="runrow" data-wname="${esc(w.name.toLowerCase())}"><div class="runinfo"><b>${esc(w.name)}</b><span class="small muted">${esc(fmtLine(w))}</span></div>
+          <a class="btn sm" href="#editar-tr-${enc(id)}">Editar</a></div>`).join("")}</div></div>`).join("")}`;
+    } else if (tab === "ex") {
+      body = `<a class="btn primary block" href="#editar-ex-novo">＋ Novo exercício</a>
+        <input class="search" id="admSearch" type="search" placeholder="Buscar exercício…" style="margin-top:10px">
+        <div class="card runlist">${Object.entries(CAT.exercises).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, e]) => `
+          <div class="runrow" data-wname="${esc((e.name + " " + (e.alt || "")).toLowerCase())}"><div class="runinfo"><b>${esc(e.name)}</b><span class="small muted">${[e.clip ? "🎬 demo" : "", e.youtube ? "▶ YouTube" : "", (e.how || []).length ? "📋 como fazer" : ""].filter(Boolean).join(" · ") || "sem conteúdo"}</span></div>
+          <a class="btn sm" href="#editar-ex-${enc(id)}">Editar</a></div>`).join("")}</div>`;
+    } else {
+      body = `<div class="card" id="aqBox">${warmEditorHtml()}</div>`;
+    }
+    return `<a class="btn sm ghost" href="#ajustes">← Ajustes</a><div class="section"></div>
+      <div class="eyebrow">Adm</div><h1>Gerenciar</h1>
+      <p class="small muted">O que você salvar aqui vale para todos que usam o app. O progresso de cada pessoa continua separado.</p>
+      <div class="seg seg4">${tabs.map(([k, v]) => `<a href="#gerenciar-${k}" class="${k === tab ? "on" : ""}">${v}</a>`).join("")}</div>
+      <div class="section"></div>${body}`;
+  }
+  function bindAdmin(tab) {
+    const s = $("#admSearch");
+    if (s) s.oninput = (e) => {
+      const q = e.target.value.toLowerCase();
+      $$("[data-wname]").forEach((r) => (r.hidden = !r.dataset.wname.includes(q)));
+      $$(".wgroup").forEach((g) => (g.hidden = !$$("[data-wname]", g).some((r) => !r.hidden)));
+    };
+    if ((tab || "seq") === "aq") bindWarmEditor();
+  }
+
+  // Aquecimento
+  let WDRAFT = null;
+  function warmEditorHtml() {
+    WDRAFT = WDRAFT || (CAT.warmup || []).map((x) => x.slice());
+    return `<h3>Aquecimento (vale para todos os treinos)</h3>
+      <div class="edrows">${WDRAFT.map(([id, note], i) => `
+        <div class="edrow"><span class="ednum">${i + 1}</span>
+          <select data-wq="${i}" aria-label="Exercício">${exOptions(id)}</select>
+          <input type="text" data-wn="${i}" value="${esc(note || "")}" placeholder="ex.: x8 cada lado" aria-label="Observação">
+          <span class="edbtns"><button type="button" class="btn sm ghost" data-wup="${i}" aria-label="Subir">↑</button><button type="button" class="btn sm ghost" data-wdn="${i}" aria-label="Descer">↓</button><button type="button" class="btn sm ghost" data-wrm="${i}" aria-label="Remover">✕</button></span>
+        </div>`).join("")}</div>
+      <button type="button" class="btn ghost" id="wAdd">＋ Adicionar exercício</button>
+      <div class="row" style="margin-top:12px"><button type="button" class="btn primary grow" id="wSave">Salvar aquecimento</button></div>`;
+  }
+  function bindWarmEditor() {
+    const box = $("#aqBox"), redraw = () => { box.innerHTML = warmEditorHtml(); bindWarmEditor(); };
+    $$("[data-wq]").forEach((el) => (el.onchange = () => (WDRAFT[+el.dataset.wq][0] = el.value)));
+    $$("[data-wn]").forEach((el) => (el.oninput = () => (WDRAFT[+el.dataset.wn][1] = el.value)));
+    $$("[data-wup]").forEach((b) => (b.onclick = () => { const i = +b.dataset.wup; if (i > 0) { [WDRAFT[i - 1], WDRAFT[i]] = [WDRAFT[i], WDRAFT[i - 1]]; redraw(); } }));
+    $$("[data-wdn]").forEach((b) => (b.onclick = () => { const i = +b.dataset.wdn; if (i < WDRAFT.length - 1) { [WDRAFT[i + 1], WDRAFT[i]] = [WDRAFT[i], WDRAFT[i + 1]]; redraw(); } }));
+    $$("[data-wrm]").forEach((b) => (b.onclick = () => { WDRAFT.splice(+b.dataset.wrm, 1); redraw(); }));
+    $("#wAdd").onclick = () => { WDRAFT.push([Object.keys(CAT.exercises)[0], ""]); redraw(); };
+    $("#wSave").onclick = async () => {
+      CAT.warmup = WDRAFT.map((x) => x.slice()); WDRAFT = null;
+      if (await saveCatalog()) { toast("Aquecimento salvo"); route(); }
+    };
+  }
+
+  // Editor (exercício, treino, sequência)
+  let ED = null; // { kind, id, isNew, d }
+  function viewEditor(arg) {
+    if (!IS_ADMIN) return adminOnly();
+    const cut = arg.indexOf("-"), kind = arg.slice(0, cut), raw = arg.slice(cut + 1), id = raw === "novo" ? null : dec(raw);
+    const key = kind + ":" + (id || "novo");
+    if (!ED || ED.key !== key) {
+      const src = kind === "ex" ? CAT.exercises : kind === "tr" ? CAT.workouts : CAT.programs;
+      let d;
+      if (id && src[id]) d = JSON.parse(JSON.stringify(src[id]));
+      else if (id) return `<a class="btn sm ghost" href="#gerenciar-${kind}">← Voltar</a><p>Não encontrado.</p>`;
+      else if (kind === "ex") d = { name: "", alt: "", q: "", how: [], youtube: "", clip: "" };
+      else if (kind === "tr") d = { name: "", cat: "full", type: "sets", sets: 3, reps: 10, rest: 45, min: 20, amrap: 12, rounds: 3, work: 30, ex: [] };
+      else d = { name: "", kind: "days", days: Array(7).fill(null), weekly: [null, null, null, null, null, null, null], weeks: 4, note: "" };
+      ED = { key, kind, id, isNew: !id, d };
+    }
+    return `<div id="edBox">${editorHtml()}</div>`;
+  }
+  function editorHtml() {
+    const { kind, d, isNew } = ED;
+    const back = `<a class="btn sm ghost" href="#gerenciar-${kind}">← Voltar</a><div class="section"></div>`;
+    const actions = `<div class="edactions">
+        <button type="button" class="btn primary grow" id="edSave">Salvar</button>
+        ${isNew ? "" : `<button type="button" class="btn ghost" id="edDup">Duplicar</button><button type="button" class="btn danger" id="edDel">Excluir</button>`}
+      </div>`;
+    if (kind === "ex") {
+      const steps = (d.how || []).filter((x) => !/^Atenção:/.test(x)), warn = ((d.how || []).find((x) => /^Atenção:/.test(x)) || "").replace(/^Atenção:\s*/, "");
+      return `${back}<div class="eyebrow">${isNew ? "Novo" : "Editar"} exercício</div><h1>${esc(d.name || "Exercício")}</h1>
+        <div class="card">
+          <label class="f">Nome (inglês)<input type="text" data-f="name" value="${esc(d.name)}" placeholder="ex.: Kettlebell swings"></label>
+          <label class="f">Nome em português (só para a busca)<input type="text" data-f="alt" value="${esc(d.alt || "")}"></label>
+          <label class="f">Como fazer (um passo por linha)<textarea data-f="steps" rows="5">${esc(steps.join("\n"))}</textarea></label>
+          <label class="f">Atenção (erro mais comum)<input type="text" data-f="warn" value="${esc(warn)}"></label>
+        </div>
+        <div class="card">
+          <h3>Vídeos</h3>
+          <label class="f">Link do YouTube (padrão para todos)<input type="text" inputmode="url" data-f="youtube" value="${esc(d.youtube || "")}" placeholder="https://youtu.be/..."></label>
+          <label class="f">Termo de busca no YouTube<input type="text" data-f="q" value="${esc(d.q || "")}" placeholder="ex.: kettlebell swing form"></label>
+          <div class="f">Demo (vídeo curto que toca dentro do app)</div>
+          <div id="clipBox">${d.clip ? `<video class="clip" src="${esc(d.clip)}" muted autoplay loop playsinline></video>
+            <button type="button" class="btn sm ghost" id="clipDel" style="margin-top:8px">Remover demo</button>` : `<p class="small muted" style="margin:0 0 8px">Sem demo.</p>`}</div>
+          ${CAN_EMBED ? `<p class="small muted">Para enviar vídeos, use o app publicado no claude.ai.</p>` : `<label class="btn ghost" style="cursor:pointer;margin-top:8px">⬆ ${d.clip ? "Trocar" : "Enviar"} vídeo<input type="file" id="clipUp" accept="video/mp4,video/quicktime,video/webm,video/*" hidden></label>
+          <p class="small muted">Vídeos curtos (10–20 s, até 20 MB). MP4 funciona em qualquer celular; .mov do iPhone pode não tocar no Android.</p>`}
+        </div>${actions}`;
+    }
+    if (kind === "tr") {
+      const typeFields = d.type === "sets"
+        ? `<div class="grid3"><label class="f">Séries<input type="number" min="1" data-f="sets" value="${d.sets}"></label><label class="f">Reps<input type="number" min="1" data-f="reps" value="${d.reps}"></label><label class="f">Descanso (s)<input type="number" min="0" data-f="rest" value="${d.rest}"></label></div>`
+        : d.type === "amrap"
+          ? `<div class="grid3"><label class="f">AMRAP (min)<input type="number" min="1" data-f="amrap" value="${d.amrap}"></label></div>`
+          : `<div class="grid3"><label class="f">Rounds<input type="number" min="1" data-f="rounds" value="${d.rounds}"></label><label class="f">Tempo (s)<input type="number" min="5" data-f="work" value="${d.work}"></label><label class="f">Descanso (s)<input type="number" min="0" data-f="rest" value="${d.rest}"></label></div>`;
+      return `${back}<div class="eyebrow">${isNew ? "Novo" : "Editar"} treino</div><h1>${esc(d.name || "Treino")}</h1>
+        <div class="card">
+          <label class="f">Nome<input type="text" data-f="name" value="${esc(d.name)}" placeholder="ex.: Upper Shred"></label>
+          <div class="grid2">
+            <label class="f">Categoria<select data-f="cat">${Object.entries(CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === d.cat ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></label>
+            <label class="f">Duração (min)<input type="number" min="1" data-f="min" value="${d.min}"></label>
+          </div>
+          <label class="f">Formato<select data-f="type" data-redraw="1">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === d.type ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+          ${typeFields}
+        </div>
+        <div class="card">
+          <h3>Exercícios</h3>
+          <div class="edrows">${d.ex.map(([id, note, reps], i) => `
+            <div class="edrow"><span class="ednum">${i + 1}</span>
+              <select data-xq="${i}" aria-label="Exercício">${exOptions(id)}</select>
+              ${d.type === "amrap" ? `<input type="number" min="1" data-xr="${i}" value="${reps || 10}" class="edreps" aria-label="Repetições" title="Repetições">` : ""}
+              <input type="text" data-xn="${i}" value="${esc(note || "")}" placeholder="Observação (opcional)" aria-label="Observação">
+              <span class="edbtns"><button type="button" class="btn sm ghost" data-xup="${i}" aria-label="Subir">↑</button><button type="button" class="btn sm ghost" data-xdn="${i}" aria-label="Descer">↓</button><button type="button" class="btn sm ghost" data-xrm="${i}" aria-label="Remover">✕</button></span>
+            </div>`).join("") || '<p class="small muted">Nenhum exercício ainda.</p>'}</div>
+          <button type="button" class="btn ghost" id="xAdd">＋ Adicionar exercício</button>
+          ${d.type === "amrap" ? '<p class="small muted">No AMRAP, o número ao lado é a quantidade de repetições de cada exercício por round.</p>' : ""}
+        </div>${actions}`;
+    }
+    // sequência
+    const daysHtml = d.kind === "weekly"
+      ? `<label class="f">Número de semanas<input type="number" min="1" max="52" data-f="weeks" value="${d.weeks || 4}"></label>
+        <div class="edrows">${DOW_FULL.map((name, i) => `<div class="edrow dayrow"><span class="edday">${name}</span><select data-pw="${i}">${wkOptions((d.weekly || [])[i])}</select></div>`).join("")}</div>`
+      : `<div class="row"><label class="f grow" style="margin:0">Quantidade de dias<input type="number" min="1" max="365" id="pN" value="${(d.days || []).length}"></label><button type="button" class="btn ghost" id="pApplyN" style="align-self:flex-end">Aplicar</button></div>
+        <div class="edrows" style="margin-top:10px">${(d.days || []).map((wid, i) => `<div class="edrow dayrow"><span class="edday">Dia ${i + 1}</span><select data-pd="${i}">${wkOptions(wid)}</select></div>`).join("")}</div>`;
+    return `${back}<div class="eyebrow">${isNew ? "Nova" : "Editar"} sequência</div><h1>${esc(d.name || "Sequência")}</h1>
+      <div class="card">
+        <label class="f">Nome<input type="text" data-f="name" value="${esc(d.name)}" placeholder="ex.: Shred 30 dias"></label>
+        <label class="f">Descrição (aparece ao escolher a sequência)<textarea data-f="note" rows="2">${esc(d.note || "")}</textarea></label>
+        <label class="f">Tipo<select data-f="kind" data-redraw="1">
+          <option value="days" ${d.kind !== "weekly" ? "selected" : ""}>Dias numerados (Dia 1, 2, 3…)</option>
+          <option value="weekly" ${d.kind === "weekly" ? "selected" : ""}>Dias da semana (repete toda semana)</option>
+        </select></label>
+      </div>
+      <div class="card"><h3>${d.kind === "weekly" ? "Treino de cada dia da semana" : "Treino de cada dia"}</h3>
+        <p class="small muted" style="margin-top:4px">Escolha "Descanso" nos dias sem treino.</p>${daysHtml}</div>${actions}`;
+  }
+  function bindEditor() {
+    if (!ED || !$("#edBox")) return;
+    const d = ED.d, redraw = () => { $("#edBox").innerHTML = editorHtml(); bindEditor(); };
+    const numF = ["sets", "reps", "rest", "min", "amrap", "rounds", "work", "weeks"];
+    $$("#edBox [data-f]").forEach((el) => {
+      const f = el.dataset.f;
+      const apply = () => {
+        let v = el.value;
+        if (numF.includes(f)) v = Math.max(0, +v || 0);
+        if (f === "steps" || f === "warn") {
+          const st = ($('[data-f="steps"]').value || "").split("\n").map((x) => x.trim()).filter(Boolean);
+          const wn = ($('[data-f="warn"]').value || "").trim();
+          d.how = wn ? [...st, "Atenção: " + wn] : st;
+        } else d[f] = v;
+        if (f === "name") $("#edBox h1").textContent = v || "—";
+        if (el.dataset.redraw) redraw();
+      };
+      el.addEventListener(el.tagName === "SELECT" ? "change" : "input", apply);
+    });
+    // treino: exercícios
+    $$("[data-xq]").forEach((el) => (el.onchange = () => (d.ex[+el.dataset.xq][0] = el.value)));
+    $$("[data-xn]").forEach((el) => (el.oninput = () => (d.ex[+el.dataset.xn][1] = el.value)));
+    $$("[data-xr]").forEach((el) => (el.oninput = () => (d.ex[+el.dataset.xr][2] = Math.max(1, +el.value || 1))));
+    $$("[data-xup]").forEach((b) => (b.onclick = () => { const i = +b.dataset.xup; if (i > 0) { [d.ex[i - 1], d.ex[i]] = [d.ex[i], d.ex[i - 1]]; redraw(); } }));
+    $$("[data-xdn]").forEach((b) => (b.onclick = () => { const i = +b.dataset.xdn; if (i < d.ex.length - 1) { [d.ex[i + 1], d.ex[i]] = [d.ex[i], d.ex[i + 1]]; redraw(); } }));
+    $$("[data-xrm]").forEach((b) => (b.onclick = () => { d.ex.splice(+b.dataset.xrm, 1); redraw(); }));
+    const xAdd = $("#xAdd"); if (xAdd) xAdd.onclick = () => { d.ex.push([Object.entries(CAT.exercises).sort((a, b) => a[1].name.localeCompare(b[1].name))[0][0], "", 10]); redraw(); };
+    // sequência: dias
+    $$("[data-pd]").forEach((el) => (el.onchange = () => (d.days[+el.dataset.pd] = el.value || null)));
+    $$("[data-pw]").forEach((el) => (el.onchange = () => { d.weekly = d.weekly || Array(7).fill(null); d.weekly[+el.dataset.pw] = el.value || null; }));
+    const ap = $("#pApplyN"); if (ap) ap.onclick = () => {
+      const n = Math.min(365, Math.max(1, +$("#pN").value || 1));
+      d.days = d.days || []; while (d.days.length < n) d.days.push(null); d.days.length = n; redraw();
+    };
+    // exercício: demo
+    const up = $("#clipUp");
+    if (up) up.onchange = async () => {
+      const file = up.files[0]; if (!file) return;
+      if (file.size > 20 * 1024 * 1024) { toast("Vídeo maior que 20 MB. Corte ou comprima antes."); return; }
+      try {
+        const assets = await window.claude.use("assets");
+        if (!assets) { toast("Envio de vídeos indisponível aqui"); return; }
+        toast("Enviando vídeo…");
+        const r = await assets.upload(file);
+        d.clip = r.url; redraw(); toast("Vídeo enviado. Toque em Salvar.");
+      } catch (e) { toast("Não consegui enviar: " + ((e && (e.code || e.message)) || "erro")); }
+    };
+    const cd = $("#clipDel"); if (cd) cd.onclick = () => { d.clip = ""; redraw(); };
+    // ações
+    $("#edSave").onclick = async () => {
+      if (!String(d.name || "").trim()) { toast("Dê um nome antes de salvar"); return; }
+      const store = ED.kind === "ex" ? CAT.exercises : ED.kind === "tr" ? CAT.workouts : CAT.programs;
+      if (ED.kind === "tr") {
+        if (!d.ex.length) { toast("Adicione pelo menos um exercício"); return; }
+        ["sets", "reps", "rest", "min", "amrap", "rounds", "work"].forEach((k) => (d[k] = +d[k] || 0));
+      }
+      if (ED.kind === "seq") {
+        const ids = d.kind === "weekly" ? d.weekly || [] : d.days || [];
+        if (!ids.some(Boolean)) { toast("Escolha pelo menos um dia com treino"); return; }
+        d.weeks = Math.max(1, +d.weeks || 1);
+      }
+      if (ED.kind === "ex") { d.youtube = (d.youtube || "").trim(); d.q = (d.q || "").trim() || d.name; }
+      const id = ED.id || newId(ED.kind === "ex" ? "e" : ED.kind === "tr" ? "t" : "p");
+      store[id] = JSON.parse(JSON.stringify(d));
+      if (await saveCatalog()) { toast("Salvo"); ED = null; location.hash = "gerenciar-" + (ED_KIND_TAB[store === CAT.exercises ? "ex" : store === CAT.workouts ? "tr" : "seq"]); }
+    };
+    const dup = $("#edDup");
+    if (dup) dup.onclick = () => {
+      const copy = JSON.parse(JSON.stringify(d)); copy.name = (copy.name || "") + " (cópia)";
+      const kind = ED.kind; ED = { key: kind + ":novo", kind, id: null, isNew: true, d: copy };
+      if (location.hash === "#editar-" + kind + "-novo") redraw(); else location.hash = "editar-" + kind + "-novo";
+      toast("Cópia criada. Ajuste e salve.");
+    };
+    const del = $("#edDel");
+    if (del) del.onclick = async () => {
+      const used = ED.kind === "ex" ? exerciseUsage(ED.id) : ED.kind === "tr" ? workoutUsage(ED.id) : [];
+      if (used.length) { toast("Em uso em: " + used.slice(0, 3).join(", ") + (used.length > 3 ? "…" : "")); return; }
+      if (!del.dataset.armed) { del.dataset.armed = "1"; del.textContent = "Toque de novo para excluir"; setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = "Excluir"; } }, 4000); return; }
+      const store = ED.kind === "ex" ? CAT.exercises : ED.kind === "tr" ? CAT.workouts : CAT.programs, kind = ED.kind;
+      delete store[ED.id];
+      if (await saveCatalog()) { toast("Excluído"); ED = null; location.hash = "gerenciar-" + kind; }
+    };
+  }
+  const ED_KIND_TAB = { ex: "ex", tr: "tr", seq: "seq" };
 
   // ---------- Init ----------
   window.addEventListener("hashchange", route);
@@ -2037,6 +2600,7 @@ const CLIPS = {
   // Ao abrir o app, começa sempre no Calendário
   if (location.hash && location.hash !== "#calendario") { try { history.replaceState(null, "", "#calendario"); } catch (e) { location.hash = ""; } }
   document.addEventListener("click", onVideoClick);
+  activate();
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.running) keepAwake(true); });
   route();
   cloudInit();
