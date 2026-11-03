@@ -125,21 +125,24 @@ h3 { font-size: 22px; }
 .ex { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
 .ex > .i { grid-column: 1; }
 .ex > div:nth-child(2) { grid-column: 2 / -1; }
-.ex .log.side { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end; align-self: center; }
+.ex .log.side { grid-column: 3; grid-row: 1; flex-direction: column; align-items: flex-end; align-self: start; }
 .ex:has(.log.side) > div:nth-child(2) { grid-column: 2; }
-.ex:has(.log.side) .vidwrap { grid-column: 2; }
+.ex:has(.log.side) .vidwrap { grid-column: 2 / -1; }
 .ex:last-child { border-bottom: 0; }
 .ex .i { font-family: var(--display); font-size: 22px; color: var(--lime); font-style: italic; line-height: 1.1; }
 .ex .name { font-weight: 800; }
 .ex .orig { font-size: 12px; color: var(--muted); }
 .ex .target { color: var(--lime); font-weight: 800; }
 .ex .vids { display: flex; gap: 6px; flex-wrap: wrap; }
+.ex .vids .vbtn { padding: 6px 8px; white-space: nowrap; }
+.ex .vids { gap: 5px; }
 .vbtn {
   display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
   background: #ff0033; color: #fff; font-weight: 800; font-size: 12px; padding: 6px 10px; border-radius: 8px;
 }
 .vbtn.alt { background: var(--card-2); color: var(--text); }
 .vbtn.pin { background: var(--lime); color: var(--lime-ink); }
+.vbtn.yt { background: #ff0033; color: #fff; }
 button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
 .vbtn.ghostv { background: transparent; border: 1.5px dashed var(--line); color: var(--text); }
 .vidwrap { grid-column: 2 / -1; display: grid; gap: 8px; min-width: 0; }

@@ -474,12 +474,12 @@
     const e = exInfo(id), vid = ytId(S.videos[id]);
     const mine = vid
       ? (CAN_EMBED
-          ? `<button type="button" class="vbtn pin" data-play="${id}">▶ Assistir aqui</button>`
-          : `<a class="vbtn pin" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ Meu vídeo</a>`)
+          ? `<button type="button" class="vbtn yt" data-play="${id}">▶ YouTube</button>`
+          : `<a class="vbtn yt" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ YouTube</a>`)
       : "";
     const clip = clipOf(id);
     return `<div class="vids">
-        ${clip ? `<button type="button" class="vbtn pin" data-clip="${id}">🎬 Demonstração</button>` : ""}
+        ${clip ? `<button type="button" class="vbtn pin" data-clip="${id}">🎬 Demo</button>` : ""}
         ${mine}
         ${vid ? "" : `<a class="vbtn" href="${ytSearch(e.qEn)}" target="_blank" rel="noopener">🔎 Buscar</a>`}
         <button type="button" class="vbtn ghostv" data-paste="${id}">${vid ? "✎ Trocar" : "＋ Colar link"}</button>
@@ -506,16 +506,16 @@
     const wrap = b.closest(".vidwrap"); if (!wrap) return;
     const id = wrap.dataset.vw, box = $("[data-pastebox]", wrap), player = $("[data-player]", wrap);
     if (b.dataset.clip) {
-      if (!player.hidden && player.dataset.kind === "clip") { player.hidden = true; player.innerHTML = ""; b.textContent = "🎬 Demonstração"; return; }
-      player.innerHTML = clipTag(id); player.dataset.kind = "clip"; player.hidden = false; b.textContent = "✕ Fechar demonstração";
+      if (!player.hidden && player.dataset.kind === "clip") { player.hidden = true; player.innerHTML = ""; b.textContent = "🎬 Demo"; return; }
+      player.innerHTML = clipTag(id); player.dataset.kind = "clip"; player.hidden = false; b.textContent = "✕ Fechar";
       return;
     }
     if (b.dataset.play) {
       player.dataset.kind = "yt";
-      if (!player.hidden) { player.hidden = true; player.innerHTML = ""; b.textContent = "▶ Assistir aqui"; return; }
+      if (!player.hidden) { player.hidden = true; player.innerHTML = ""; b.textContent = "▶ YouTube"; return; }
       const vid = ytId(S.videos[id]);
       player.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&autoplay=1" title="${esc(exInfo(id).pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
-      player.hidden = false; b.textContent = "✕ Fechar vídeo";
+      player.hidden = false; b.textContent = "✕ Fechar";
     } else if (b.dataset.paste) {
       box.hidden = !box.hidden; if (!box.hidden) $("input", box).focus();
     } else if (b.dataset.pastesave) {
