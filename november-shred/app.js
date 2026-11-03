@@ -979,7 +979,10 @@
           <ol id="fxHow"></ol>
           <p class="fx-warn" id="fxWarn"></p>
         </div>
-        <div class="fx-list" id="fxList"></div>
+        <div class="fx-listwrap">
+          <div class="fx-tabs" id="fxTabs"></div>
+          <div class="fx-list" id="fxList"></div>
+        </div>
       </div>`;
     document.body.appendChild(el);
     document.documentElement.classList.add("fx-lock");
@@ -991,6 +994,7 @@
       if (R.key) { restToggle(); return; }
       const box = $("#timerBox [data-t=play]"); if (box && (T.running || T.remain < (T.segs[T.i]?.secs || 0) * 1000)) box.click();
     };
+    $("#fxTabs").onclick = (e) => { const b = e.target.closest("[data-sec]"); if (b) { F.sec = b.dataset.sec; fxPaintList(); } };
     $("#fxList").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) { F.idx = +b.dataset.fx; fxRender(true); } };
     keepAwake(true);
     fxRender(true);
@@ -1076,6 +1080,11 @@
     if (!full) {
       // atualiza só o alvo (séries/rounds) e os checks da lista
       $("#fxTarget").innerHTML = fxTargetHtml(n, it);
+      const tabs = $$("#fxTabs [data-sec] span"), its = focusItems(n);
+      if (tabs.length === 2) {
+        tabs[0].textContent = `${its.filter((x) => x.kind === "warm" && fxItemDone(n, x)).length}/${WARMUP.length}`;
+        if (w.type === "sets") tabs[1].textContent = `${its.filter((x) => x.kind === "ex" && fxItemDone(n, x)).length}/${its.filter((x) => x.kind === "ex").length}`;
+      }
       $$("#fxList [data-fx]").forEach((b) => { const x = items[+b.dataset.fx]; b.classList.toggle("done", fxItemDone(n, x)); b.classList.toggle("on", +b.dataset.fx === F.idx); });
       return;
     }
@@ -1095,13 +1104,23 @@
       F.vidFor = it.id;
       $("#fxPlayer").innerHTML = CAN_EMBED && vid ? `<div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?rel=0&playsinline=1&mute=1&loop=1&playlist=${vid}" title="${esc(e.pt)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>` : "";
     }
+    if (F.lastIdx !== F.idx) F.sec = it.kind;
+    fxPaintList();
+    if (F.lastIdx !== F.idx) { F.lastIdx = F.idx; const body = $("#focus .fx-body"); if (body) body.scrollTop = 0; }
+  }
+  function fxPaintList() {
+    const n = F.n, items = focusItems(n);
+    const warmDone = items.filter((x) => x.kind === "warm" && fxItemDone(n, x)).length;
+    const exItems = items.filter((x) => x.kind === "ex"), exDone = exItems.filter((x) => fxItemDone(n, x)).length;
+    $("#fxTabs").innerHTML = `
+      <button type="button" data-sec="warm" class="${F.sec === "warm" ? "on" : ""}">Aquecimento <span>${warmDone}/${WARMUP.length}</span></button>
+      <button type="button" data-sec="ex" class="${F.sec === "ex" ? "on" : ""}">Treino <span>${WORKOUTS[n - 1].type === "sets" ? `${exDone}/${exItems.length}` : exItems.length}</span></button>`;
     $("#fxList").innerHTML = items.map((x, j) => {
+      if (x.kind !== F.sec) return "";
       const xi = exInfo(x.id), lab = x.kind === "warm" ? `A${x.k + 1}` : String(x.i + 1).padStart(2, "0");
-      const head = j === 0 ? `<div class="fx-sec">Aquecimento</div>` : j === WARMUP.length ? `<div class="fx-sec">Treino</div>` : "";
-      return `${head}<button type="button" class="fx-item ${j === F.idx ? "on" : ""} ${fxItemDone(n, x) ? "done" : ""}" data-fx="${j}">
+      return `<button type="button" class="fx-item ${j === F.idx ? "on" : ""} ${fxItemDone(n, x) ? "done" : ""}" data-fx="${j}">
         <span class="fx-num">${lab}</span><span class="fx-txt"><b>${esc(xi.pt)}</b><small>${esc(fxSub(n, x))}</small></span></button>`;
     }).join("");
-    if (F.lastIdx !== F.idx) { F.lastIdx = F.idx; const body = $("#focus .fx-body"); if (body) body.scrollTop = 0; }
   }
   function fxTargetHtml(n, it) {
     if (!it) return "";
