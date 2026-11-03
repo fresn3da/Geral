@@ -159,8 +159,17 @@ button.vbtn { border: 0; cursor: pointer; font-family: inherit; }
   outline: 1.5px solid #6ec1ff;
 }
 .restpill.paused { opacity: .7; }
-.restsel { display: grid; gap: 4px; margin-top: 12px; font-size: 12px; color: var(--muted); font-weight: 600; }
-.restsel select { width: 100%; background: var(--card-2); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 16px; color: var(--text); }
+/* Descanso · testar alarme · modo foco numa linha só */
+.restrow { display: grid; grid-template-columns: minmax(0, 0.85fr) 44px minmax(0, 1.3fr); gap: 8px; margin-top: 12px; align-items: stretch; }
+.restsel select { width: 100%; min-width: 0; }
+.restsel { position: relative; display: flex; align-items: center; background: var(--card-2); border: 1.5px solid var(--line); border-radius: 12px; padding-left: 10px; min-height: 44px; }
+.restsel span { font-size: 16px; pointer-events: none; }
+.restsel select { appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding: 10px 26px 10px 6px; font-size: 16px; font-weight: 800; color: var(--text); cursor: pointer; }
+.restsel::after { content: "▾"; position: absolute; right: 10px; color: var(--muted); pointer-events: none; }
+.restsel:focus-within { outline: 2px solid var(--lime); outline-offset: 1px; }
+.restsel select:focus { outline: none; }
+.iconbtn { padding: 0; font-size: 18px; }
+.restrow #focusBtn { white-space: nowrap; padding: 8px 10px; }
 .dhead { margin-top: 10px; font-size: 14px; }
 .ditem { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 6px; min-width: 0; }
 .ditem:last-child { border-bottom: 0; }

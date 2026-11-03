@@ -148,12 +148,19 @@
   function restOf(w) { return +S.settings.rest || w.rest || 30; }
   function restSelect(w) {
     const cur = +S.settings.rest || 0;
-    return `<label class="restsel">⏱ Descanso entre exercícios
-      <select id="restSel">
-        <option value="0" ${cur === 0 ? "selected" : ""}>Padrão do treino (${w.rest || 30}s)</option>
-        ${REST_OPTIONS.map((v) => `<option value="${v}" ${cur === v ? "selected" : ""}>${v}s</option>`).join("")}
-      </select></label>
-      <button type="button" class="btn sm ghost" id="restTest" style="margin-top:8px">🔊 Testar alarme do descanso</button>`;
+    return `<div class="restrow">
+      <label class="restsel" title="Descanso entre exercícios">
+        <span aria-hidden="true">⏱</span>
+        <select id="restSel" aria-label="Descanso entre exercícios">
+          ${[...new Set([...REST_OPTIONS, w.rest || 30])].sort((x, y) => x - y).map((v) => {
+            const def = v === (w.rest || 30), sel = def ? (cur === 0 || cur === v) : cur === v;
+            return `<option value="${def ? 0 : v}" ${sel ? "selected" : ""}>${v}s</option>`;
+          }).join("")}
+        </select>
+      </label>
+      <button type="button" class="btn ghost iconbtn" id="restTest" aria-label="Testar alarme do descanso" title="Testar alarme do descanso">🔊</button>
+      <button type="button" class="btn primary" id="focusBtn">🎯 Modo foco</button>
+    </div>`;
   }
   function hhmm(ms) { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
 
@@ -614,7 +621,6 @@
         <p class="small muted" style="margin:6px 0 10px">${esc(description(w, t))}</p>
         <div class="seg" id="levelSeg">${Object.entries(LEVELS).map(([k, v]) => `<button data-level="${k}" class="${k === level ? "on" : ""}">${v}</button>`).join("")}</div>
         ${restSelect(w)}
-        <button type="button" class="btn primary block" id="focusBtn" style="margin-top:12px">🎯 Treinar em modo foco</button>
       </div>
 
       ${warmupDay(log)}
