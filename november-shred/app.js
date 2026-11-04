@@ -1,4 +1,4 @@
-/* November Shred — app de acompanhamento
+/* Kettlebellpedia — enciclopédia e acompanhamento de treinos de kettlebell
    Tudo é salvo no próprio aparelho (localStorage). Use Ajustes > Exportar para backup. */
 (function () {
   "use strict";
@@ -51,13 +51,14 @@
       exercises[id] = { name: e[1], alt: e[0], q: e[2], how: (HOWTO[id] || []).slice(), youtube: "", clip: (typeof CLIPS !== "undefined" && CLIPS[id]) || "" };
     });
     const workouts = {};
-    WORKOUTS.forEach((w) => { const c = JSON.parse(JSON.stringify(w)); delete c.day; workouts["d" + w.day] = c; });
+    const shredSrc = { name: "November Shred Challenge · @trainwithpb_", url: "https://www.instagram.com/trainwithpb_/" };
+    WORKOUTS.forEach((w) => { const c = JSON.parse(JSON.stringify(w)); delete c.day; c.source = Object.assign({}, shredSrc); workouts["d" + w.day] = c; });
     return {
       v: 1, updatedAt: 0, exercises, workouts,
       warmup: WARMUP.map((x) => x.slice()),
       programs: {
         [SHRED_ID]: {
-          name: "November Shred · 30 dias", kind: "days", days: WORKOUTS.map((w) => "d" + w.day),
+          name: "November Shred · 30 dias", kind: "days", days: WORKOUTS.map((w) => "d" + w.day), source: Object.assign({}, shredSrc),
           weekly: [null, null, null, null, null, null, null], weeks: 4,
           note: "O mesmo tipo de treino nunca cai em dias seguidos, e a cada 7 dias tem um Mobility & Core Flow mais leve para você se recuperar.",
         },
@@ -478,13 +479,15 @@
     timerStop(true); closeFocus();
     if (name !== "editar") ED = null;
     if (!(name === "gerenciar" && arg === "aq")) WDRAFT = null;
-    const tabOf = { dia: "calendario", foco: "calendario", exercicio: "exercicios", nova: "hoje", avulso: "hoje", gerenciar: "ajustes", editar: "ajustes" };
+    const tabOf = { dia: "calendario", foco: "calendario", exercicio: "enciclopedia", exercicios: "enciclopedia", treino: "enciclopedia", seq: "enciclopedia", nova: "hoje", avulso: "hoje", gerenciar: "ajustes", editar: "ajustes" };
     $$("#tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === (tabOf[name] || name)));
     const v = $("#view");
     if (name === "dia" || name === "foco") { v.innerHTML = viewDay(+arg); if (RUN && WD(+arg)) { bindDay(+arg); if (name === "foco") openFocus(+arg); } }
     else if (name === "calendario") v.innerHTML = viewCalendar();
     else if (name === "progresso") { if (!RUN) v.innerHTML = viewNoRun(); else { v.innerHTML = viewProgress(); bindProgress(); } }
-    else if (name === "exercicios") { v.innerHTML = viewExercises(); bindExercises(); }
+    else if (name === "exercicios" || name === "enciclopedia") { v.innerHTML = viewEnc(name === "exercicios" ? "ex" : arg); bindEnc(); }
+    else if (name === "treino") { const id = dec(arg); v.innerHTML = viewWorkout(id); bindWorkout(id); }
+    else if (name === "seq") { const id = dec(arg); v.innerHTML = viewProgram(id); bindProgram(id); }
     else if (name === "exercicio") { const id = arg.replace(/-/g, "_"); v.innerHTML = viewExercise(id); }
     else if (name === "ajustes") { v.innerHTML = viewSettings(); bindSettings(); }
     else if (name === "nova") { v.innerHTML = viewNew(); bindNew(); }
@@ -582,6 +585,7 @@
       ${top}
       <div class="section"><h3>Começar</h3></div>
       <div class="grid2"><a class="btn primary" href="#nova">＋ Sequência</a><a class="btn ghost" href="#avulso">🏋️ Treino avulso</a></div>
+      <a class="btn ghost block" href="#enciclopedia" style="margin-top:8px">📚 Explorar a enciclopédia</a>
       ${seqs.length ? `<div class="section"><h3>Minhas sequências</h3></div><div class="card runlist">${seqs.map(([id, r]) => runRow(id, r)).join("")}</div>` : ""}
       ${singles.length ? `<div class="section"><h3>Treinos avulsos</h3></div><div class="card runlist">${singles.map(([id, r]) => runRow(id, r)).join("")}</div>` : ""}
       ${RUN && WD(n) ? `<div class="section"><h3>Antes de começar</h3></div>${warmupDay(getLog(n) || {})}` : ""}
@@ -1579,45 +1583,34 @@
 
   // ---------- Exercícios ----------
   function usedIn(id) { return TDAYS.filter((w) => w.ex.some(([e]) => e === id)).map((w) => w.day); }
-  function viewExercises() {
-    const ids = Object.keys(CAT.exercises).sort((a, b) => exInfo(a).en.localeCompare(exInfo(b).en, "en"));
-    return `
-      <div class="eyebrow">Biblioteca</div><h1>Exercícios <span class="lime">& vídeos</span></h1>
-      <p class="small muted">${ids.length} movimentos do desafio. Toque em ▶ para ver a execução no YouTube. Achou um vídeo bom? Abra o exercício e fixe o link com ★.</p>
-      <input class="search" id="exSearch" type="search" placeholder="Buscar exercício…">
-      <div class="card" id="exList">
-        ${ids.map((id) => `<div data-name="${esc((exInfo(id).en + " " + exInfo(id).ptAlt).toLowerCase())}">${exRow(id, usedIn(id).length + "×", "", "", `<div class="log">Dias: ${usedIn(id).map((d) => `<a href="#dia-${d}">${d}</a>`).join(", ") || "aquecimento"}</div>`)}</div>`).join("")}
-      </div>`;
-  }
-  function bindExercises() {
-    $("#exSearch").oninput = (e) => {
-      const q = e.target.value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-      $$("#exList > div").forEach((d) => (d.style.display = d.dataset.name.normalize("NFD").replace(/[̀-ͯ]/g, "").includes(q) ? "" : "none"));
-    };
-  }
   function viewExercise(id) {
-    if (!CAT.exercises[id]) return `<p>Exercício não encontrado.</p>`;
-    const e = exInfo(id), h = exerciseHistory(id), days = usedIn(id);
-    const pts = h.filter((x) => x.reps != null && x.type !== "amrap").map((x) => ({ label: "D" + x.day, y: x.reps }));
+    const x = CAT.exercises[id];
+    if (!x) return `<a class="btn sm ghost" href="#enciclopedia-ex">← Exercícios</a><p>Exercício não encontrado.</p>`;
+    const e = exInfo(id), h = exerciseHistory(id), days = usedIn(id), ws = workoutsWithExercise(id);
+    const how = x.how || [], steps = how.filter((t) => !/^Atenção:/.test(t)), warn = how.find((t) => /^Atenção:/.test(t));
+    const pts = h.filter((r) => r.reps != null && r.type !== "amrap").map((r) => ({ label: "D" + r.day, y: r.reps }));
     return `
-      <a class="btn sm ghost" href="#exercicios">← Exercícios</a>
+      <a class="btn sm ghost" href="#enciclopedia-ex">← Exercícios</a>
       <div class="section"></div>
-      <div class="eyebrow">Exercício</div><h1>${esc(e.en)}</h1>
+      <div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="eyebrow">Exercício</div><h1>${esc(e.en)}</h1></div>
+        ${IS_ADMIN ? `<a class="btn sm ghost" href="#editar-ex-${enc(id)}">Editar</a>` : ""}</div>
+      ${x.clip ? `<div class="card"><video class="clip" src="${esc(x.clip)}" muted autoplay loop playsinline style="margin:0 auto"></video></div>` : ""}
+      ${steps.length || warn ? `<div class="card"><h3>Como fazer</h3>
+        ${steps.length ? `<ol class="howlist">${steps.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
+        ${warn ? `<p class="fx-warn" style="margin-top:8px">⚠️ <b>Atenção:</b> ${esc(warn.replace(/^Atenção:\s*/, ""))}</p>` : ""}
+        ${sourceHtml(x.source)}</div>` : ""}
       <div class="card">
         <h3>Vídeos</h3>
-        <p class="small muted" style="margin:6px 0 0">Busque um vídeo, copie o link e cole aqui. Ele fica salvo neste exercício em todos os treinos.</p>
-        <div style="margin:10px 0">${videoButtons(id)}</div>
+        <div style="margin:10px 0 0">${videoButtons(id)}</div>
       </div>
-      <div class="card">
-        <h3>Aparece nos dias</h3>
-        <div class="chips">${days.map((d) => `<a class="chip" href="#dia-${d}" style="text-decoration:none">Dia ${d} · ${esc(WD(d).name)}</a>`).join("") || '<span class="muted small">Aquecimento</span>'}</div>
-      </div>
-      <div class="card">
+      ${ws.length ? `<div class="card"><h3>Usado nos treinos</h3><div class="chips">${ws.map(([wid, w]) => `<a class="chip" href="#treino-${enc(wid)}" style="text-decoration:none">${esc(w.name)}</a>`).join("")}</div></div>` : ""}
+      ${RUN && days.length ? `<div class="card"><h3>Na sua sequência atual</h3><div class="chips">${days.map((d) => `<a class="chip" href="#dia-${d}" style="text-decoration:none">Dia ${d} · ${esc(WD(d).name)}</a>`).join("")}</div></div>` : ""}
+      ${h.length ? `<div class="card">
         <h3>Seu histórico</h3>
         ${chart(pts)}
-        ${h.length ? `<table class="t" style="margin-top:8px"><tr><th>Dia</th><th>Formato</th><th>Reps</th><th>KB</th></tr>
-          ${h.map((x) => `<tr><td><a href="#dia-${x.day}">${x.day}</a></td><td>${x.type === "sets" ? "séries" : x.type === "amrap" ? "AMRAP" : "30s"}</td><td>${x.reps ?? "—"}</td><td>${x.bell != null ? esc(x.bell) + " kg" : "—"}</td></tr>`).join("")}</table>` : `<div class="empty">Ainda sem registros para este exercício.</div>`}
-      </div>`;
+        <table class="t" style="margin-top:8px"><tr><th>Dia</th><th>Formato</th><th>Reps</th><th>KB</th></tr>
+          ${h.map((r) => `<tr><td><a href="#dia-${r.day}">${r.day}</a></td><td>${r.type === "sets" ? "séries" : r.type === "amrap" ? "AMRAP" : "30s"}</td><td>${r.reps ?? "—"}</td><td>${r.bell != null ? esc(r.bell) + " kg" : "—"}</td></tr>`).join("")}</table>
+      </div>` : ""}`;
   }
   // ---------- Ajustes ----------
   function viewSettings() {
@@ -1656,7 +1649,7 @@
         <h3>Zerar dados</h3>
         <button class="btn danger" id="reset">Apagar todo o progresso</button>
       </div>
-      <p class="small muted">Programa padrão: November Shred Challenge (@trainwithpb_). Aqueça antes, hidrate-se e pare se algo parecer errado. Em caso de problemas de saúde, consulte um médico.</p>`;
+      <p class="small muted">Kettlebellpedia · treinos catalogados de várias fontes; cada um mostra de onde veio. Aqueça antes, hidrate-se e pare se algo parecer errado. Em caso de problemas de saúde, consulte um médico.</p>`;
   }
   function bindSettings() {
     const ss = $("#sStart"); if (ss) ss.onchange = (e) => { if (e.target.value && RUN) { RUN.start = e.target.value; save(); activate(); toast("Data atualizada"); } };
@@ -1665,7 +1658,7 @@
     $("#sSound").onchange = (e) => { S.settings.sound = e.target.checked; save(); };
     $("#sTest").onclick = () => { unlockAudio(); setTimeout(alarm, 150); };
     $("#exp").onclick = async () => {
-      const json = JSON.stringify(S, null, 2), filename = `november-shred-backup-${isoDate(new Date())}.json`;
+      const json = JSON.stringify(S, null, 2), filename = `kettlebellpedia-backup-${isoDate(new Date())}.json`;
       if (window.claude && typeof window.claude.use === "function") {
         const dl = await window.claude.use("downloads").catch(() => null);
         if (dl) { try { await dl.save({ filename, data: json }); toast("Backup salvo"); } catch (e) { if (e && e.code !== "declined") toast("Não foi possível salvar o arquivo aqui"); } return; }
@@ -1686,6 +1679,137 @@
       } catch (err) { toast("Arquivo inválido"); }
     };
     armConfirm($("#reset"), "Toque de novo para apagar tudo", () => { S = JSON.parse(JSON.stringify(DEFAULT)); save(); activate(); toast("Dados apagados"); route(); });
+  }
+
+  // ---------- Enciclopédia ----------
+  const norm = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  function sourceHtml(src) {
+    if (!src || !(src.name || src.url)) return "";
+    const label = esc(src.name || src.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]);
+    return `<div class="source">Fonte: ${src.url ? `<a href="${esc(src.url)}" target="_blank" rel="noopener">${label} ↗</a>` : label}</div>`;
+  }
+  function srcText(src) { return src ? (src.name || "") + " " + (src.url || "") : ""; }
+  function workoutPrograms(id) { return Object.entries(CAT.programs).filter(([, p]) => (p.days || []).includes(id) || (p.weekly || []).includes(id)); }
+  function workoutsWithExercise(id) { return Object.entries(CAT.workouts).filter(([, w]) => w.ex.some(([e]) => e === id)); }
+
+  function viewEnc(tab) {
+    tab = tab || "seq";
+    const np = Object.keys(CAT.programs).length, nw = Object.keys(CAT.workouts).length, ne = Object.keys(CAT.exercises).length;
+    const tabs = [["seq", `Sequências <span>${np}</span>`], ["tr", `Treinos <span>${nw}</span>`], ["ex", `Exercícios <span>${ne}</span>`]];
+    let body = "";
+    if (tab === "seq") {
+      body = Object.entries(CAT.programs).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, p]) => `
+        <a class="card enc-card" href="#seq-${enc(id)}" data-q="${esc(norm(p.name + " " + (p.note || "") + " " + srcText(p.source)))}">
+          <div class="eyebrow" style="margin:0">${esc(programDesc(p))}</div>
+          <h2>${esc(p.name)}</h2>
+          ${p.note ? `<p class="small muted enc-note">${esc(p.note)}</p>` : ""}
+          ${p.source && p.source.name ? `<div class="small lime">${esc(p.source.name)}</div>` : ""}
+        </a>`).join("") || '<div class="card muted">Nenhuma sequência cadastrada.</div>';
+    } else if (tab === "tr") {
+      const groups = {};
+      Object.entries(CAT.workouts).forEach(([id, w]) => { (groups[w.cat] = groups[w.cat] || []).push([id, w]); });
+      body = Object.keys(CATEGORIES).filter((c) => groups[c]).map((c) => `
+        <div class="wgroup"><div class="section"><h3 style="color:${CATEGORIES[c].color}">${esc(CATEGORIES[c].label)}</h3></div>
+        <div class="card runlist">${groups[c].sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, w]) => `
+          <a class="runrow enc-row" href="#treino-${enc(id)}" data-q="${esc(norm(w.name + " " + CATEGORIES[c].label + " " + srcText(w.source) + " " + w.ex.map(([e]) => exInfo(e).en + " " + exInfo(e).ptAlt).join(" ")))}">
+            <div class="runinfo"><b>${esc(w.name)}</b><span class="small muted">${esc(fmtLine(w))} · ${w.ex.length} exercícios${w.source && w.source.name ? " · " + esc(w.source.name) : ""}</span></div>
+            <span class="enc-go">›</span>
+          </a>`).join("")}</div></div>`).join("");
+    } else {
+      body = `<div class="card runlist">${Object.entries(CAT.exercises).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, e]) => `
+        <a class="runrow enc-row" href="#exercicio-${enc(id)}" data-q="${esc(norm(e.name + " " + (e.alt || "") + " " + srcText(e.source)))}">
+          <div class="runinfo"><b>${esc(e.name)}</b><span class="small muted">${[e.clip ? "🎬 demo" : "", (e.youtube || S.videos[id]) ? "▶ YouTube" : "", `${workoutsWithExercise(id).length} treinos`].filter(Boolean).join(" · ")}</span></div>
+          <span class="enc-go">›</span>
+        </a>`).join("")}</div>`;
+    }
+    return `
+      <div class="eyebrow">Kettlebellpedia</div><h1>Enciclopédia</h1>
+      <p class="small muted">Sequências, treinos e exercícios catalogados${IS_ADMIN ? ` · <a href="#gerenciar-${tab === "ex" ? "ex" : tab}">Gerenciar</a>` : ""}.</p>
+      <div class="seg seg3 enc-tabs">${tabs.map(([k, v]) => `<a href="#enciclopedia-${k}" class="${k === tab ? "on" : ""}">${v}</a>`).join("")}</div>
+      <input class="search" id="encSearch" type="search" placeholder="Buscar por nome, exercício, categoria ou fonte…" style="margin-top:10px">
+      <div id="encBody">${body}</div>
+      <p class="empty" id="encEmpty" hidden>Nada encontrado.</p>`;
+  }
+  function bindEnc() {
+    $("#encSearch").oninput = (e) => {
+      const q = norm(e.target.value).trim();
+      $$("#encBody [data-q]").forEach((el) => (el.hidden = q && !el.dataset.q.includes(q)));
+      $$("#encBody .wgroup").forEach((g) => (g.hidden = !$$("[data-q]", g).some((r) => !r.hidden)));
+      $("#encEmpty").hidden = $$("#encBody [data-q]").some((r) => !r.hidden);
+    };
+  }
+
+  // Página de um treino
+  function viewWorkout(id) {
+    const w = CAT.workouts[id];
+    if (!w) return `<a class="btn sm ghost" href="#enciclopedia-tr">← Treinos</a><p>Treino não encontrado.</p>`;
+    const t = target(w, S.settings.level), progs = workoutPrograms(id);
+    const rows = w.ex.map(([eid, note, reps], i) => `
+      <a class="runrow enc-row" href="#exercicio-${enc(eid)}">
+        <span class="enc-num">${i + 1}</span>
+        <div class="runinfo"><b>${esc(exInfo(eid).en)}</b><span class="small muted">${[w.type === "amrap" ? `x${reps + t.plus}` : "", note].filter(Boolean).map(esc).join(" · ")}</span></div>
+        <span class="enc-go">›</span>
+      </a>`).join("");
+    return `
+      <a class="btn sm ghost" href="#enciclopedia-tr">← Treinos</a><div class="section"></div>
+      <div class="card accent" style="${catStyle(w.cat)}">
+        <span class="tag" style="${catStyle(w.cat)}">${esc(catOf(w.cat).label)}</span>
+        <h1 style="margin-top:10px">${esc(w.name)}</h1>
+        <div class="chips">${formatChips(w, t)}</div>
+        <p class="small muted" style="margin:6px 0 0">${esc(description(w, t))}</p>
+        ${sourceHtml(w.source)}
+        <div class="row" style="margin-top:12px">
+          <button type="button" class="btn primary grow" id="doSingle">🏋️ Fazer agora</button>
+          ${IS_ADMIN ? `<a class="btn ghost" href="#editar-tr-${enc(id)}">Editar</a>` : ""}
+        </div>
+      </div>
+      <div class="card runlist"><h3>Exercícios</h3>${rows}</div>
+      ${progs.length ? `<div class="card"><h3>Faz parte de</h3><div class="chips">${progs.map(([pid, p]) => `<a class="chip" href="#seq-${enc(pid)}" style="text-decoration:none">${esc(p.name)}</a>`).join("")}</div></div>` : ""}`;
+  }
+  function bindWorkout(id) {
+    const b = $("#doSingle"); if (!b) return;
+    b.onclick = () => {
+      const rid = newId("s");
+      S.runs[rid] = { kind: "single", workoutId: id, start: isoDate(new Date()), logs: {}, createdAt: Date.now() };
+      setActive(rid); location.hash = "dia-1";
+    };
+  }
+
+  // Página de uma sequência
+  function viewProgram(id) {
+    const p = CAT.programs[id];
+    if (!p) return `<a class="btn sm ghost" href="#enciclopedia-seq">← Sequências</a><p>Sequência não encontrada.</p>`;
+    const wname = (wid) => (wid && CAT.workouts[wid] ? CAT.workouts[wid] : null);
+    const line = (label, wid) => {
+      const w = wname(wid);
+      return w ? `<a class="runrow enc-row" href="#treino-${enc(wid)}" style="${catStyle(w.cat)}"><span class="enc-day">${label}</span><div class="runinfo"><b>${esc(w.name)}</b><span class="small muted">${esc(fmtLine(w))}</span></div><span class="enc-go">›</span></a>`
+        : `<div class="runrow enc-row rest"><span class="enc-day">${label}</span><div class="runinfo"><span class="muted">Descanso</span></div></div>`;
+    };
+    const days = p.kind === "weekly" ? DOW_FULL.map((d, i) => line(d, (p.weekly || [])[i])).join("") : (p.days || []).map((wid, i) => line(`Dia ${i + 1}`, wid)).join("");
+    const mine = Object.entries(S.runs).filter(([, r]) => r.kind !== "single" && r.programId === id);
+    return `
+      <a class="btn sm ghost" href="#enciclopedia-seq">← Sequências</a><div class="section"></div>
+      <div class="card">
+        <div class="eyebrow" style="margin:0">${esc(programDesc(p))}</div>
+        <h1>${esc(p.name)}</h1>
+        ${p.note ? `<p class="small" style="margin:8px 0 0">${esc(p.note)}</p>` : ""}
+        ${sourceHtml(p.source)}
+        ${mine.length ? `<p class="small lime" style="margin:10px 0 0">Você já tem ${mine.length > 1 ? mine.length + " rodadas" : "esta sequência"}: ${mine.map(([, r]) => { const s = runStats(r); return `${s.done}/${s.total}`; }).join(", ")}.</p>` : ""}
+        <div class="row" style="margin-top:12px">
+          <label class="f grow" style="margin:0">Dia 1 em<input type="date" id="seqStart" value="${isoDate(new Date())}"></label>
+          <button type="button" class="btn primary" id="seqGo" style="align-self:flex-end">Começar</button>
+        </div>
+        ${IS_ADMIN ? `<a class="btn ghost block" href="#editar-seq-${enc(id)}" style="margin-top:8px">Editar sequência</a>` : ""}
+      </div>
+      <div class="card runlist"><h3>${p.kind === "weekly" ? `Toda semana · ${p.weeks || 1} semana(s)` : "Dia a dia"}</h3>${days}</div>`;
+  }
+  function bindProgram(id) {
+    const b = $("#seqGo"); if (!b) return;
+    b.onclick = () => {
+      const rid = newId("r");
+      S.runs[rid] = { kind: "program", programId: id, start: $("#seqStart").value || isoDate(new Date()), logs: {}, createdAt: Date.now() };
+      setActive(rid); toast("Sequência iniciada"); location.hash = "calendario";
+    };
   }
 
   // ---------- Adm: gerenciar cadastros ----------
@@ -1816,6 +1940,10 @@
           <label class="f">Nome em português (só para a busca)<input type="text" data-f="alt" value="${esc(d.alt || "")}"></label>
           <label class="f">Como fazer (um passo por linha)<textarea data-f="steps" rows="5">${esc(steps.join("\n"))}</textarea></label>
           <label class="f">Atenção (erro mais comum)<input type="text" data-f="warn" value="${esc(warn)}"></label>
+          <div class="grid2">
+            <label class="f">Fonte (nome)<input type="text" data-f="srcName" value="${esc((d.source && d.source.name) || "")}" placeholder="ex.: @trainwithpb_"></label>
+            <label class="f">Link da fonte<input type="text" inputmode="url" data-f="srcUrl" value="${esc((d.source && d.source.url) || "")}" placeholder="https://..."></label>
+          </div>
         </div>
         <div class="card">
           <h3>Vídeos</h3>
@@ -1840,6 +1968,10 @@
           <div class="grid2">
             <label class="f">Categoria<select data-f="cat">${Object.entries(CATEGORIES).map(([k, c]) => `<option value="${k}" ${k === d.cat ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></label>
             <label class="f">Duração (min)<input type="number" min="1" data-f="min" value="${d.min}"></label>
+          </div>
+          <div class="grid2">
+            <label class="f">Fonte (nome)<input type="text" data-f="srcName" value="${esc((d.source && d.source.name) || "")}" placeholder="ex.: @trainwithpb_"></label>
+            <label class="f">Link da fonte<input type="text" inputmode="url" data-f="srcUrl" value="${esc((d.source && d.source.url) || "")}" placeholder="https://..."></label>
           </div>
           <label class="f">Formato<select data-f="type" data-redraw="1">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === d.type ? "selected" : ""}>${v}</option>`).join("")}</select></label>
           ${typeFields}
@@ -1867,6 +1999,10 @@
       <div class="card">
         <label class="f">Nome<input type="text" data-f="name" value="${esc(d.name)}" placeholder="ex.: Shred 30 dias"></label>
         <label class="f">Descrição (aparece ao escolher a sequência)<textarea data-f="note" rows="2">${esc(d.note || "")}</textarea></label>
+          <div class="grid2">
+            <label class="f">Fonte (nome)<input type="text" data-f="srcName" value="${esc((d.source && d.source.name) || "")}" placeholder="ex.: @trainwithpb_"></label>
+            <label class="f">Link da fonte<input type="text" inputmode="url" data-f="srcUrl" value="${esc((d.source && d.source.url) || "")}" placeholder="https://..."></label>
+          </div>
         <label class="f">Tipo<select data-f="kind" data-redraw="1">
           <option value="days" ${d.kind !== "weekly" ? "selected" : ""}>Dias numerados (Dia 1, 2, 3…)</option>
           <option value="weekly" ${d.kind === "weekly" ? "selected" : ""}>Dias da semana (repete toda semana)</option>
@@ -1884,7 +2020,10 @@
       const apply = () => {
         let v = el.value;
         if (numF.includes(f)) v = Math.max(0, +v || 0);
-        if (f === "steps" || f === "warn") {
+        if (f === "srcName" || f === "srcUrl") {
+          d.source = { name: ($('[data-f="srcName"]').value || "").trim(), url: ($('[data-f="srcUrl"]').value || "").trim() };
+          if (d.source.url && !/^https?:\/\//i.test(d.source.url)) d.source.url = "https://" + d.source.url;
+        } else if (f === "steps" || f === "warn") {
           const st = ($('[data-f="steps"]').value || "").split("\n").map((x) => x.trim()).filter(Boolean);
           const wn = ($('[data-f="warn"]').value || "").trim();
           d.how = wn ? [...st, "Atenção: " + wn] : st;

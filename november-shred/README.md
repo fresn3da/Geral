@@ -1,8 +1,17 @@
-# November Shred — app de acompanhamento
+# Kettlebellpedia
 
-App (PWA) para acompanhar o **November Shred Challenge** (@trainwithpb_): 30 treinos de kettlebell, 15–25 min por dia.
+Enciclopédia de treinos de kettlebell para catalogar treinos encontrados na internet (com a fonte de cada um) e acompanhar a evolução. Começou com o **November Shred Challenge** (@trainwithpb_), que continua como a primeira sequência cadastrada.
 
-## Funcionalidades
+- **Enciclopédia:** sequências, treinos e exercícios com busca, página própria e fonte (nome + link).
+- **Sequências:** dias numerados ou dias da semana repetidos por N semanas, com data de início; também treinos avulsos.
+- **Adm (Gerenciar):** quem edita o app cadastra exercícios (passo a passo, YouTube, vídeo Demo), treinos, sequências e o aquecimento. Todos leem; só editores alteram.
+- **Treino:** modo foco, timers com alarme, diário de bordo com horários e evolução. O progresso de cada pessoa é privado.
+
+---
+
+## Detalhes da versão inicial (November Shred)
+
+### Funcionalidades
 - **Hoje**: treino do dia (Dia 1 = 01/11, ajustável), progresso, sequência e minutos.
 - **Calendário** dos 30 dias com as cores das categorias e marcação dos concluídos.
 - **Treino do dia**: exercícios com vídeos (YouTube EN/PT), metas ajustadas por nível (iniciante / intermediário / avançado), aquecimento.

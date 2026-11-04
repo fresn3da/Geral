@@ -1,7 +1,7 @@
 {
-  "name": "November Shred",
-  "short_name": "Shred",
-  "description": "Acompanhe o desafio November Shred: 30 treinos de kettlebell.",
+  "name": "Kettlebellpedia",
+  "short_name": "KBpedia",
+  "description": "Enciclopédia de treinos de kettlebell, com sequências, timers e evolução.",
   "start_url": "./#calendario",
   "scope": "./",
   "display": "standalone",

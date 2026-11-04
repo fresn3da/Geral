@@ -390,3 +390,21 @@ button.fx-badge { border: 0; }
 .edday { font-weight: 800; font-size: 13px; }
 .edactions { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 20px; }
 .edactions .grow { flex: 1; }
+
+/* Enciclopédia */
+.seg3 { grid-template-columns: repeat(3, 1fr); }
+.enc-tabs a { text-align: center; padding: 9px 2px; border-radius: 9px; font-weight: 800; font-size: 13px; color: var(--muted); text-decoration: none; }
+.enc-tabs a span { opacity: .7; font-variant-numeric: tabular-nums; margin-left: 2px; }
+.enc-tabs a.on { background: var(--lime); color: var(--lime-ink); }
+a.enc-card { display: grid; gap: 4px; text-decoration: none; color: var(--text); }
+.enc-note { margin: 2px 0 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+a.enc-row { text-decoration: none; color: var(--text); grid-template-columns: minmax(0, 1fr) auto; }
+a.enc-row:has(.enc-num), .enc-row:has(.enc-day) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.enc-go { color: var(--muted); font-size: 22px; line-height: 1; }
+.enc-num { font-family: var(--display); font-size: 20px; color: var(--lime); font-style: italic; width: 22px; text-align: center; }
+.enc-day { font-weight: 800; font-size: 12px; color: var(--cat, var(--muted)); min-width: 58px; }
+.enc-row.rest { opacity: .6; }
+.source { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.source a { font-weight: 800; }
+.howlist { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 5px; font-size: 15px; line-height: 1.4; }
+.brand-a { color: var(--text); }

@@ -12,7 +12,7 @@ clips_path = os.path.join(here, "clips_artifact.json")
 clips = json.load(open(clips_path)) if os.path.exists(clips_path) else {}
 data = re.sub(r"const CLIPS = \{.*?\};", "const CLIPS = " + json.dumps(clips, indent=2) + ";", data, flags=re.S)
 body = rd("index.html").split("<body>")[1].split("<script")[0]
-page = f"""<title>November Shred</title>
+page = f"""<title>Kettlebellpedia</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
