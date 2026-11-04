@@ -408,3 +408,9 @@ a.enc-row:has(.enc-num), .enc-row:has(.enc-day) { grid-template-columns: auto mi
 .source a { font-weight: 800; }
 .howlist { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 5px; font-size: 15px; line-height: 1.4; }
 .brand-a { color: var(--text); }
+
+.srcbox { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+.source div + div { margin-top: 2px; }
+.linked { margin-top: 10px; display: grid; gap: 2px; color: var(--muted); }
+.linked a { font-weight: 800; }
+a.vbtn.yt { display: inline-flex; }
