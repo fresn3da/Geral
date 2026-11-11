@@ -17,7 +17,13 @@ Na contagem completa, o app fala o número e **espera ela repetir** antes de ir 
 - O botão **👄 Falei!** avança na hora, para aparelhos sem microfone ou se o reconhecimento falhar.
 - O botão 🎤 no topo liga/desliga esse modo (desligado, a contagem é automática como antes).
 
-O microfone funciona no Chrome/Edge (computador e Android) e no Safari. No app do Claude para celular o microfone não é liberado; lá use o botão "Falei!".
+O microfone funciona no Chrome/Edge (computador e Android) e no Safari. **No app do Claude para celular o microfone não é liberado**; lá o app mostra o botão "Falei!" e o link para abrir no navegador.
+
+### Endereço para abrir no navegador (GitHub Pages)
+Ative uma vez: no GitHub, **Settings → Pages → Build and deployment → Source: Deploy from a branch**,
+escolha o branch `claude/affectionate-franklin-d3ht2i` e a pasta `/ (root)`, e salve.
+Em 1–2 minutos o app fica em **https://fresn3da.github.io/Geral/contando-ate-20/**.
+No iPhone, o reconhecimento de voz do Safari precisa da Siri/Ditado ativado nos Ajustes.
 
 Extras: tocar numa figura já contada repete o número dela; 🔊 liga/desliga o som; 🔄 recomeça.
 A trilha de bolinhas embaixo mostra o progresso de 1 a 20.

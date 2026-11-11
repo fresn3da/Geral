@@ -140,6 +140,9 @@
   .app.listening .big { min-height: 0; }
   .app.listening .big .num { font-size: 64px; }
   .app.listening .big .word { font-size: 22px; }
+  .nomic { font-size: 15px; text-align: center; max-width: 340px; line-height: 1.35; opacity: .85; }
+  .nomic a { color: var(--ink); font-weight: 800; word-break: break-all; }
+  [hidden] { display: none !important; }
   .heard { min-height: 22px; font-size: 18px; opacity: .75; text-align: center; }
 
   @media (prefers-reduced-motion: reduce) {
@@ -172,6 +175,10 @@
     <button class="mic" id="mic" type="button">🎤 Ouvindo…</button>
     <button class="falei" id="falei" type="button">👄 Falei!</button>
     <div class="heard" id="heard"></div>
+    <div class="nomic" id="nomic" hidden>
+      Aqui o microfone não funciona, então toque em "Falei!".
+      <span id="openWrap"><br>Para o app ouvir sozinho, abra no Chrome ou Safari:<br><a id="openLink" target="_blank" rel="noopener"></a></span>
+    </div>
   </div>
 
   <div class="board" id="board"></div>
@@ -263,9 +270,15 @@
 
   // Reconhecimento do navegador (Chrome, Edge, Safari).
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let srOK = !!SR, rec = null, srWanted = false;
-  function srStart() {
+  const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  // Endereço onde o app abre fora do Claude, com microfone (GitHub Pages).
+  const BROWSER_URL = 'https://fresn3da.github.io/Geral/contando-ate-20/';
+  // srBlocked: o navegador recusou sem um toque; um toque no botão do microfone resolve.
+  let srOK = !!SR, srBlocked = false, rec = null, srWanted = false;
+  function srStart(fromTap = false) {
     if (!srOK || rec || micMode() !== 'sr') return;
+    if (srBlocked && !fromTap) return;
+    srBlocked = false;
     srWanted = true;
     rec = new SR();
     rec.lang = 'pt-BR'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 5;
@@ -275,7 +288,10 @@
       }
     };
     rec.onerror = e => {
-      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(e.error)) { srOK = false; srWanted = false; }
+      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(e.error)) {
+        srWanted = false;
+        if (fromTap || inFrame || e.error === 'audio-capture') srOK = false; else srBlocked = true;
+      }
     };
     rec.onend = () => { rec = null; if (srWanted && srOK) setTimeout(srStart, 250); updateMicUI(); };
     try { rec.start(); } catch (e) { rec = null; }
@@ -308,6 +324,20 @@
     });
   }
 
+  // Pede as permissões no toque de "Começar": liga e desliga o reconhecimento.
+  function srPrime() {
+    if (!srOK) return;
+    try {
+      const r = new SR();
+      r.lang = 'pt-BR';
+      r.onstart = () => { try { r.abort(); } catch (e) {} };
+      r.onerror = e => {
+        if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(e.error)) { srOK = false; updateMicUI(); }
+      };
+      r.start();
+    } catch (e) {}
+  }
+
   function micMode() { return dict ? 'dict' : (srOK ? 'sr' : 'none'); }
 
   function updateMicUI() {
@@ -315,11 +345,13 @@
     const mode = micMode();
     mic.classList.remove('on', 'ask');
     mic.hidden = false;
+    $('nomic').hidden = mode !== 'none';
     if (mode === 'dict' && dictState === 'idle') { mic.textContent = '🎤 Toque para ligar o microfone'; mic.classList.add('ask'); }
     else if (mode === 'dict') { mic.textContent = '🎤 Ouvindo…'; mic.classList.add('on'); }
     else if (mode === 'sr' && rec) { mic.textContent = '🎤 Ouvindo…'; mic.classList.add('on'); }
+    else if (mode === 'sr' && srBlocked) { mic.textContent = '🎤 Toque para ligar o microfone'; mic.classList.add('ask'); }
     else if (mode === 'sr') { mic.textContent = '🎤 …'; }
-    else { mic.textContent = 'Sem microfone aqui: toque em "Falei!"'; }
+    else { mic.hidden = true; }
   }
 
   // Espera a criança repetir o número n. Resolve quando ela fala o número
@@ -572,17 +604,19 @@
     // Pede o microfone já neste toque (o navegador exige um toque).
     if (repeatMode) {
       if (dict) dictStart();
-      else if (srOK && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ audio: true })
-          .then(s => s.getTracks().forEach(t => t.stop()))
-          .catch(err => { if (err && err.name === 'NotAllowedError') { srOK = false; updateMicUI(); } });
-      }
+      else if (!inFrame) srPrime();
+      else if (SR) srOK = false; // dentro do app do Claude o navegador não libera o microfone
     }
     newRound();
     say('Vamos contar! Toque nas figuras!');
   });
   $('restart').addEventListener('click', newRound);
-  $('mic').addEventListener('click', () => { if (micMode() === 'dict' && dictState === 'idle') dictStart(); });
+  $('mic').addEventListener('click', () => {
+    if (micMode() === 'dict' && dictState === 'idle') dictStart();
+    else if (micMode() === 'sr' && !rec) srStart(true);
+  });
+  if (inFrame) { const a = $('openLink'); a.href = BROWSER_URL; a.textContent = BROWSER_URL.replace('https://', ''); }
+  else $('openWrap').hidden = true;
   const repeatBtn = $('repeatToggle');
   const showRepeat = () => repeatBtn.classList.toggle('off', !repeatMode);
   showRepeat();
