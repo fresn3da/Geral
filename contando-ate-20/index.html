@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffd93d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Contando">
+<title>Vamos Contar</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔢</text></svg>">
+<style>
+  :root {
+    --bg1: #fff6d6;
+    --bg2: #ffe0ec;
+    --ink: #3b2a55;
+    --card: #ffffff;
+    --accent: #ff6fa5;
+    --accent2: #5ac8fa;
+    --ok: #4cd18a;
+    --dim: #e9e3f3;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: linear-gradient(160deg, var(--bg1), var(--bg2));
+    color: var(--ink);
+    font-family: "Baloo 2", "Comic Sans MS", "Chalkboard SE", system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+  .app {
+    height: 100dvh; display: flex; flex-direction: column;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
+    max-width: 720px; margin: 0 auto; gap: 10px;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .icon-btn {
+    border: 0; background: rgba(255,255,255,.75); border-radius: 50%;
+    width: 48px; height: 48px; font-size: 24px; cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0,0,0,.08);
+  }
+  .goal { font-size: 18px; font-weight: 700; opacity: .8; text-align: center; flex: 1; }
+
+  .big {
+    text-align: center; line-height: 1;
+    min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .big .num { font-size: 96px; font-weight: 800; color: var(--accent); text-shadow: 0 4px 0 rgba(0,0,0,.08); }
+  .big .word { font-size: 28px; font-weight: 700; margin-top: 4px; min-height: 30px; }
+  .big .msg { font-size: 26px; font-weight: 800; }
+  .pop { animation: pop .35s ease-out; }
+  @keyframes pop { 0% { transform: scale(.5); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+  .board {
+    flex: 1; display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 10px; align-content: center;
+  }
+  .cell {
+    position: relative; aspect-ratio: 1; border: 0; border-radius: 22px;
+    background: var(--card); font-size: clamp(30px, 9vw, 60px);
+    box-shadow: 0 5px 0 rgba(0,0,0,.08); cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .1s, background .2s;
+  }
+  .board.many .cell { font-size: clamp(26px, 7.5vw, 52px); border-radius: 18px; }
+  .cell:active { transform: scale(.92); }
+  .cell.new { animation: appear .4s ease-out both; }
+  @keyframes appear { from { transform: scale(0) rotate(-20deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  .cell.done { background: var(--dim); }
+  .cell.done .e { opacity: .45; }
+  .cell .badge {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    font-size: clamp(26px, 8vw, 48px); font-weight: 800; color: var(--ink);
+    text-shadow: 0 0 4px #fff, 0 0 4px #fff, 0 0 8px #fff;
+  }
+  .cell.done .badge { display: flex; }
+  .cell.bounce { animation: bounce .45s ease-out; }
+  @keyframes bounce { 0% { transform: scale(1); } 40% { transform: scale(1.25) rotate(6deg); } 100% { transform: scale(1); } }
+  .cell.wiggle { animation: wiggle .4s; }
+  @keyframes wiggle { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+  .cell.lit {
+    background: var(--accent2); transform: scale(1.12); z-index: 2;
+    box-shadow: 0 0 0 5px #fff, 0 8px 18px rgba(0,0,0,.18);
+  }
+  .cell.lit .e { opacity: 1; }
+  .cell.lit .badge { color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.2); }
+  .board.locked .cell { pointer-events: none; }
+
+  .track { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+  .dot {
+    aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,.7);
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(11px, 3.4vw, 18px); font-weight: 800; color: rgba(59,42,85,.35);
+    transition: background .2s, color .2s, transform .2s;
+  }
+  .dot.on { background: var(--ok); color: #fff; }
+  .dot.now { transform: scale(1.25); background: var(--accent); color: #fff; }
+  .dot.hidden { visibility: hidden; }
+
+  .start {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 22px; background: linear-gradient(160deg, var(--bg1), var(--bg2)); z-index: 10; padding: 16px; text-align: center;
+  }
+  .start h1 { margin: 0; font-size: 44px; }
+  .start .emojis { font-size: 54px; letter-spacing: 6px; }
+  .start p { margin: 0; font-size: 20px; max-width: 420px; opacity: .8; }
+  .play {
+    border: 0; border-radius: 999px; background: var(--accent); color: #fff;
+    font: inherit; font-size: 34px; font-weight: 800; padding: 18px 44px; cursor: pointer;
+    box-shadow: 0 7px 0 #d94c84; animation: breathe 1.6s ease-in-out infinite;
+  }
+  .play:active { transform: translateY(4px); box-shadow: 0 3px 0 #d94c84; }
+  @keyframes breathe { 50% { transform: scale(1.06); } }
+  .hide { display: none !important; }
+
+  .confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+  .confetti span { position: absolute; top: -60px; font-size: 36px; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(115vh) rotate(540deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  }
+</style>
+</head>
+<body>
+<div class="start" id="start">
+  <div class="emojis">🍎🐶⭐🚗</div>
+  <h1>Vamos contar!</h1>
+  <p>Toque em cada figura e ouça o número.<br>Primeiro até 10, depois até 20!</p>
+  <button class="play" id="play">▶ Começar</button>
+</div>
+
+<div class="app">
+  <header>
+    <button class="icon-btn" id="sound" aria-label="Som">🔊</button>
+    <div class="goal" id="goal">Conte até 10</div>
+    <button class="icon-btn" id="restart" aria-label="Recomeçar">🔄</button>
+  </header>
+
+  <div class="big" id="big"><div class="num" id="num">0</div><div class="word" id="word"></div></div>
+
+  <div class="board" id="board"></div>
+
+  <div class="track" id="track"></div>
+</div>
+
+<div class="confetti" id="confetti"></div>
+
+<script>
+(() => {
+  const WORDS = ['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez',
+    'onze','doze','treze','catorze','quinze','dezesseis','dezessete','dezoito','dezenove','vinte'];
+
+  const THEMES = [
+    ['🍎','🍌','🍓','🍇','🍊','🍉','🍒','🍑','🍍','🥝'],
+    ['🐶','🐱','🐰','🐻','🐼','🐸','🐵','🦁','🐷','🐮'],
+    ['🚗','🚕','🚌','🚓','🚑','🚒','🚜','🚲','🚀','✈️'],
+    ['⭐','🌈','☀️','🌙','☁️','❄️','🌸','🌻','🍀','🌷'],
+    ['🦋','🐞','🐝','🐠','🐢','🦄','🐙','🐳','🦒','🐘'],
+    ['🎈','🎁','🧸','⚽','🪀','🎨','🍦','🧁','🍭','🍩'],
+  ];
+  const PARTY = ['🎉','⭐','🎈','🌟','💖','🎊','🥳'];
+
+  const $ = id => document.getElementById(id);
+  const board = $('board'), track = $('track'), numEl = $('num'), wordEl = $('word'),
+        bigEl = $('big'), goalEl = $('goal');
+
+  let count = 0, target = 10, busy = false, muted = false, themeIdx = -1, emojis = [];
+  let runId = 0; // invalidates pending timers/speech chains on restart
+
+  // ---------- Voz ----------
+  const synth = window.speechSynthesis;
+  let voice = null;
+  function pickVoice() {
+    if (!synth) return;
+    const vs = synth.getVoices();
+    voice = vs.find(v => v.lang === 'pt-BR' && /luciana|francisca|google|female|feminina/i.test(v.name))
+         || vs.find(v => v.lang === 'pt-BR')
+         || vs.find(v => /^pt/i.test(v.lang)) || null;
+  }
+  if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; }
+
+  // Fala e resolve quando terminar (com limite de tempo, pois alguns navegadores não disparam onend).
+  function say(text, { interrupt = false, rate = 0.9, pitch = 1.2 } = {}) {
+    return new Promise(resolve => {
+      if (muted || !synth) return setTimeout(resolve, 650);
+      if (interrupt) synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'pt-BR'; u.rate = rate; u.pitch = pitch;
+      if (voice) u.voice = voice;
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      u.onend = finish; u.onerror = finish;
+      setTimeout(finish, 600 + text.length * 120);
+      synth.speak(u);
+    });
+  }
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- Sons ----------
+  let actx = null;
+  function beep(freq = 660, dur = 0.12) {
+    if (muted) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'triangle'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.18, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + dur);
+    } catch (e) {}
+  }
+  function fanfare() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.18), i * 130)); }
+
+  // ---------- Tela ----------
+  function showNumber(n) {
+    bigEl.innerHTML = `<div class="num">${n}</div><div class="word">${n ? WORDS[n] : ''}</div>`;
+    bigEl.firstElementChild.classList.add('pop');
+  }
+  function showMessage(text) {
+    bigEl.innerHTML = `<div class="msg pop">${text}</div>`;
+  }
+
+  function buildTrack() {
+    track.innerHTML = '';
+    for (let i = 1; i <= 20; i++) {
+      const d = document.createElement('div');
+      d.className = 'dot'; d.textContent = i; d.dataset.n = i;
+      track.appendChild(d);
+    }
+    updateTrack();
+  }
+  function updateTrack(current = 0) {
+    track.querySelectorAll('.dot').forEach(d => {
+      const n = +d.dataset.n;
+      d.classList.toggle('hidden', n > target);
+      d.classList.toggle('on', n <= count);
+      d.classList.toggle('now', n === current);
+    });
+  }
+
+  function addCells(from, to) {
+    for (let i = from; i <= to; i++) {
+      const b = document.createElement('button');
+      b.className = 'cell new';
+      b.style.animationDelay = ((i - from) * 50) + 'ms';
+      b.innerHTML = `<span class="e">${emojis[i - 1]}</span><span class="badge"></span>`;
+      b.addEventListener('pointerdown', onTap);
+      board.appendChild(b);
+    }
+    board.classList.toggle('many', board.children.length > 10);
+  }
+
+  function confetti() {
+    const box = $('confetti');
+    for (let i = 0; i < 30; i++) {
+      const s = document.createElement('span');
+      s.textContent = PARTY[i % PARTY.length];
+      s.style.left = Math.random() * 100 + 'vw';
+      s.style.animationDuration = (1.8 + Math.random() * 1.6) + 's';
+      s.style.animationDelay = Math.random() * 0.6 + 's';
+      box.appendChild(s);
+      setTimeout(() => s.remove(), 4200);
+    }
+  }
+
+  // ---------- Jogo ----------
+  function newRound() {
+    runId++;
+    if (synth) synth.cancel();
+    themeIdx = (themeIdx + 1) % THEMES.length;
+    const t = THEMES[themeIdx];
+    const extra = [...t].sort(() => Math.random() - 0.5);
+    emojis = [...t, ...extra];
+    count = 0; target = 10; busy = false;
+    board.innerHTML = '';
+    board.classList.remove('locked');
+    goalEl.textContent = 'Conte até 10';
+    addCells(1, 10);
+    buildTrack();
+    showNumber(0);
+  }
+
+  function onTap(ev) {
+    ev.preventDefault();
+    const cell = ev.currentTarget;
+    if (busy) return;
+
+    // Já contado: repete o número dele.
+    if (cell.classList.contains('done')) {
+      cell.classList.remove('wiggle'); void cell.offsetWidth; cell.classList.add('wiggle');
+      const n = +cell.dataset.n;
+      showNumber(n);
+      say(WORDS[n], { interrupt: true });
+      return;
+    }
+
+    count++;
+    cell.dataset.n = count;
+    cell.querySelector('.badge').textContent = count;
+    cell.classList.add('done');
+    cell.classList.remove('bounce', 'new'); void cell.offsetWidth; cell.classList.add('bounce');
+    beep(440 + count * 30);
+    showNumber(count);
+    updateTrack(count);
+    say(WORDS[count], { interrupt: true });
+
+    if (count === target) milestone();
+  }
+
+  async function milestone() {
+    const id = runId;
+    busy = true;
+    board.classList.add('locked');
+    await wait(900);
+    if (id !== runId) return;
+    fanfare(); confetti();
+
+    if (target === 10) {
+      showMessage('Muito bem! 🎉<br>Agora até 20!');
+      goalEl.textContent = 'Conte até 20';
+      await say('Muito bem! Você contou até dez! Agora vamos até vinte!');
+      if (id !== runId) return;
+      target = 20;
+      addCells(11, 20);
+      updateTrack();
+      showNumber(count);
+      board.classList.remove('locked');
+      busy = false;
+    } else {
+      showMessage('Parabéns! 🥳<br>Você contou até 20!');
+      await say('Parabéns! Você contou até vinte!');
+      if (id !== runId) return;
+      await countTogether(id);
+    }
+  }
+
+  // Contagem completa de 1 a 20 para ela acompanhar.
+  async function countTogether(id) {
+    goalEl.textContent = 'Vamos contar juntas!';
+    showMessage('Vamos contar juntas! 👀');
+    await say('Agora vamos contar juntas, do um até o vinte!');
+    if (id !== runId) return;
+    await wait(400);
+
+    const cells = [...board.children].sort((a, b) => a.dataset.n - b.dataset.n);
+    for (const c of cells) {
+      if (id !== runId) return;
+      const n = +c.dataset.n;
+      cells.forEach(x => x.classList.remove('lit'));
+      c.classList.add('lit');
+      showNumber(n);
+      updateTrack(n);
+      beep(440 + n * 30, 0.08);
+      await Promise.all([say(WORDS[n], { rate: 0.85 }), wait(900)]);
+    }
+    if (id !== runId) return;
+    cells.forEach(x => x.classList.remove('lit'));
+    updateTrack();
+    fanfare(); confetti();
+    showMessage('Eeeeee! 🌟<br>De novo!');
+    await say('Muito bem! Vamos de novo!');
+    if (id !== runId) return;
+    await wait(800);
+    if (id !== runId) return;
+    newRound();
+  }
+
+  // ---------- Botões ----------
+  $('play').addEventListener('click', () => {
+    $('start').classList.add('hide');
+    // Desbloqueia áudio/voz no iOS a partir do toque.
+    beep(660, 0.05);
+    newRound();
+    say('Vamos contar! Toque nas figuras!');
+  });
+  $('restart').addEventListener('click', newRound);
+  $('sound').addEventListener('click', e => {
+    muted = !muted;
+    e.currentTarget.textContent = muted ? '🔇' : '🔊';
+    if (muted && synth) synth.cancel();
+  });
+})();
+</script>
+</body>
+</html>
