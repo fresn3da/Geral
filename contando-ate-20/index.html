@@ -119,6 +119,29 @@
   .confetti span { position: absolute; top: -60px; font-size: 36px; animation: fall linear forwards; }
   @keyframes fall { to { transform: translateY(115vh) rotate(540deg); } }
 
+  .left { display: flex; gap: 8px; }
+  .icon-btn.off { opacity: .4; }
+
+  .listen { display: none; flex-direction: column; align-items: center; gap: 8px; }
+  .listen.show { display: flex; }
+  .listen .you { font-size: 22px; font-weight: 800; }
+  .falei {
+    border: 0; border-radius: 999px; background: var(--ok); color: #fff;
+    font: inherit; font-size: 26px; font-weight: 800; padding: 10px 30px; cursor: pointer;
+    box-shadow: 0 5px 0 #34a86c;
+  }
+  .falei:active { transform: translateY(3px); box-shadow: 0 2px 0 #34a86c; }
+  .mic {
+    border: 0; border-radius: 999px; background: rgba(255,255,255,.8); color: var(--ink);
+    font: inherit; font-size: 16px; font-weight: 700; padding: 6px 14px;
+  }
+  .mic.on { background: var(--accent); color: #fff; animation: breathe 1.2s ease-in-out infinite; }
+  .mic.ask { cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.1); }
+  .app.listening .big { min-height: 0; }
+  .app.listening .big .num { font-size: 64px; }
+  .app.listening .big .word { font-size: 22px; }
+  .heard { min-height: 22px; font-size: 18px; opacity: .75; text-align: center; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   }
@@ -134,12 +157,22 @@
 
 <div class="app">
   <header>
-    <button class="icon-btn" id="sound" aria-label="Som">🔊</button>
+    <div class="left">
+      <button class="icon-btn" id="sound" aria-label="Som">🔊</button>
+      <button class="icon-btn" id="repeatToggle" aria-label="Esperar ela repetir os números" title="Esperar ela repetir os números">🎤</button>
+    </div>
     <div class="goal" id="goal">Conte até 10</div>
     <button class="icon-btn" id="restart" aria-label="Recomeçar">🔄</button>
   </header>
 
   <div class="big" id="big"><div class="num" id="num">0</div><div class="word" id="word"></div></div>
+
+  <div class="listen" id="listen">
+    <div class="you">Agora você! 🗣️</div>
+    <button class="mic" id="mic" type="button">🎤 Ouvindo…</button>
+    <button class="falei" id="falei" type="button">👄 Falei!</button>
+    <div class="heard" id="heard"></div>
+  </div>
 
   <div class="board" id="board"></div>
 
@@ -191,13 +224,166 @@
       u.lang = 'pt-BR'; u.rate = rate; u.pitch = pitch;
       if (voice) u.voice = voice;
       let done = false;
-      const finish = () => { if (!done) { done = true; resolve(); } };
+      speaking++;
+      const finish = () => {
+        if (done) return;
+        done = true; speaking--;
+        ignoreUntil = Date.now() + 700; // não confundir a voz do app com a da criança
+        resolve();
+      };
       u.onend = finish; u.onerror = finish;
       setTimeout(finish, 600 + text.length * 120);
       synth.speak(u);
     });
   }
   const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- Ouvir a criança ----------
+  // Três caminhos: ditado do Claude (quando aberto como página no Claude),
+  // reconhecimento de voz do navegador, ou o botão "Falei!" quando não há microfone.
+  let repeatMode = true;
+  try { repeatMode = localStorage.getItem('contar.repeat') !== '0'; } catch (e) {}
+  let speaking = 0, ignoreUntil = 0, listener = null, endListen = null;
+
+  const ALT = {
+    1: ['um', 'uma', 'hum', 'un'], 2: ['dois', 'duas', 'doi'], 3: ['tres', 'treis'],
+    4: ['quatro', 'quatru'], 5: ['cinco', 'cinc'], 6: ['seis', 'sei', 'meia'],
+    7: ['sete', 'set'], 8: ['oito'], 9: ['nove', 'novi'], 10: ['dez', 'des', 'deis'],
+    11: ['onze'], 12: ['doze'], 13: ['treze'], 14: ['catorze', 'quatorze'], 15: ['quinze'],
+    16: ['dezesseis', 'dezasseis'], 17: ['dezessete', 'dezassete'], 18: ['dezoito'],
+    19: ['dezenove', 'dezanove'], 20: ['vinte'],
+  };
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const hits = (text, n) => norm(text).split(' ').filter(t => t === String(n) || ALT[n].includes(t)).length;
+
+  function hear(text, final) {
+    if (!listener || !text || !text.trim()) return;
+    listener(text, final, speaking > 0 || Date.now() < ignoreUntil);
+  }
+
+  // Reconhecimento do navegador (Chrome, Edge, Safari).
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let srOK = !!SR, rec = null, srWanted = false;
+  function srStart() {
+    if (!srOK || rec || micMode() !== 'sr') return;
+    srWanted = true;
+    rec = new SR();
+    rec.lang = 'pt-BR'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 5;
+    rec.onresult = e => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        for (const alt of e.results[i]) hear(alt.transcript, e.results[i].isFinal);
+      }
+    };
+    rec.onerror = e => {
+      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(e.error)) { srOK = false; srWanted = false; }
+    };
+    rec.onend = () => { rec = null; if (srWanted && srOK) setTimeout(srStart, 250); updateMicUI(); };
+    try { rec.start(); } catch (e) { rec = null; }
+    updateMicUI();
+  }
+  function srStop() { srWanted = false; if (rec) { try { rec.abort(); } catch (e) {} rec = null; } updateMicUI(); }
+
+  // Ditado do Claude (só existe quando a página roda dentro do Claude).
+  let dict = null, dictState = 'idle';
+  if (window.claude && window.claude.use) {
+    window.claude.use('dictation').then(d => {
+      if (!d) return;
+      dict = d;
+      d.onPartial(({ text }) => hear(text, false));
+      d.onFinal(({ text }) => hear(text, true));
+      d.onState(({ state, reason }) => {
+        dictState = state;
+        if (reason === 'not_granted' || reason === 'unavailable') dict = null;
+        updateMicUI();
+      });
+      updateMicUI();
+    }).catch(() => {});
+  }
+  // Precisa ser chamado direto de um toque.
+  function dictStart() {
+    if (!dict) return;
+    dict.start().catch(err => {
+      if (err && (err.code === 'not_granted' || err.code === 'unavailable')) dict = null;
+      updateMicUI();
+    });
+  }
+
+  function micMode() { return dict ? 'dict' : (srOK ? 'sr' : 'none'); }
+
+  function updateMicUI() {
+    const mic = $('mic');
+    const mode = micMode();
+    mic.classList.remove('on', 'ask');
+    mic.hidden = false;
+    if (mode === 'dict' && dictState === 'idle') { mic.textContent = '🎤 Toque para ligar o microfone'; mic.classList.add('ask'); }
+    else if (mode === 'dict') { mic.textContent = '🎤 Ouvindo…'; mic.classList.add('on'); }
+    else if (mode === 'sr' && rec) { mic.textContent = '🎤 Ouvindo…'; mic.classList.add('on'); }
+    else if (mode === 'sr') { mic.textContent = '🎤 …'; }
+    else { mic.textContent = 'Sem microfone aqui: toque em "Falei!"'; }
+  }
+
+  // Espera a criança repetir o número n. Resolve quando ela fala o número
+  // (ou quando alguém toca em "Falei!").
+  function waitForRepeat(n, id) {
+    return new Promise(resolve => {
+      const listenEl = $('listen'), heardEl = $('heard');
+      let done = false, timer = null, tainted = false, tries = 0, wrong = 0;
+      heardEl.textContent = '';
+      listenEl.classList.add('show');
+      document.querySelector('.app').classList.add('listening');
+
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        listener = null; endListen = null;
+        srStop();
+        $('falei').onpointerdown = null;
+        if (ok) {
+          heardEl.textContent = '⭐ Isso!';
+          beep(880, 0.1); setTimeout(() => beep(1175, 0.12), 100);
+        }
+        setTimeout(() => {
+          if (listener) return;
+          listenEl.classList.remove('show');
+          document.querySelector('.app').classList.remove('listening');
+        }, ok ? 450 : 0);
+        resolve(ok);
+      };
+      endListen = () => finish(false);
+
+      $('falei').onpointerdown = e => { e.preventDefault(); finish(true); };
+
+      listener = (text, final, duringAppVoice) => {
+        // Uma frase que começou enquanto o app falava pode conter a voz do app.
+        if (duringAppVoice) { tainted = true; return; }
+        if (tainted) {
+          if (!final) return;
+          tainted = false;
+          if (hits(text, n) >= 2) finish(true); // app + criança na mesma frase
+          return;
+        }
+        heardEl.textContent = '“' + text.trim() + '”';
+        if (hits(text, n) >= 1) return finish(true);
+        if (final && ++wrong >= 3) finish(true); // ela tentou bastante: segue em frente
+      };
+
+      // Se ninguém falar, repete o número de vez em quando.
+      const remind = async () => {
+        if (done || id !== runId) return;
+        tries++;
+        srStop();
+        await say(tries % 2 ? 'Fala comigo: ' + WORDS[n] + '!' : WORDS[n], { rate: 0.85 });
+        if (done || id !== runId) return;
+        srStart();
+        timer = setTimeout(remind, 7000);
+      };
+
+      srStart();
+      updateMicUI();
+      timer = setTimeout(remind, 7000);
+    });
+  }
 
   // ---------- Sons ----------
   let actx = null;
@@ -270,6 +456,7 @@
   // ---------- Jogo ----------
   function newRound() {
     runId++;
+    if (endListen) endListen();
     if (synth) synth.cancel();
     themeIdx = (themeIdx + 1) % THEMES.length;
     const t = THEMES[themeIdx];
@@ -342,7 +529,9 @@
   async function countTogether(id) {
     goalEl.textContent = 'Vamos contar juntas!';
     showMessage('Vamos contar juntas! 👀');
-    await say('Agora vamos contar juntas, do um até o vinte!');
+    await say(repeatMode
+      ? 'Agora vamos contar juntas, do um até o vinte! Eu falo e você repete!'
+      : 'Agora vamos contar juntas, do um até o vinte!');
     if (id !== runId) return;
     await wait(400);
 
@@ -356,6 +545,12 @@
       updateTrack(n);
       beep(440 + n * 30, 0.08);
       await Promise.all([say(WORDS[n], { rate: 0.85 }), wait(900)]);
+      if (id !== runId) return;
+      if (repeatMode) {
+        await waitForRepeat(n, id);
+        if (id !== runId) return;
+        await wait(250);
+      }
     }
     if (id !== runId) return;
     cells.forEach(x => x.classList.remove('lit'));
@@ -374,10 +569,32 @@
     $('start').classList.add('hide');
     // Desbloqueia áudio/voz no iOS a partir do toque.
     beep(660, 0.05);
+    // Pede o microfone já neste toque (o navegador exige um toque).
+    if (repeatMode) {
+      if (dict) dictStart();
+      else if (srOK && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(s => s.getTracks().forEach(t => t.stop()))
+          .catch(err => { if (err && err.name === 'NotAllowedError') { srOK = false; updateMicUI(); } });
+      }
+    }
     newRound();
     say('Vamos contar! Toque nas figuras!');
   });
   $('restart').addEventListener('click', newRound);
+  $('mic').addEventListener('click', () => { if (micMode() === 'dict' && dictState === 'idle') dictStart(); });
+  const repeatBtn = $('repeatToggle');
+  const showRepeat = () => repeatBtn.classList.toggle('off', !repeatMode);
+  showRepeat();
+  repeatBtn.addEventListener('click', () => {
+    repeatMode = !repeatMode;
+    try { localStorage.setItem('contar.repeat', repeatMode ? '1' : '0'); } catch (e) {}
+    showRepeat();
+    if (!repeatMode && endListen) {
+      // Se estava esperando, segue a contagem normal.
+      const f = $('falei').onpointerdown; if (f) f(new Event('pointerdown'));
+    } else if (repeatMode && dict && dictState === 'idle') dictStart();
+  });
   $('sound').addEventListener('click', e => {
     muted = !muted;
     e.currentTarget.textContent = muted ? '🔇' : '🔊';

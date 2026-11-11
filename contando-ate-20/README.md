@@ -9,6 +9,16 @@ App para crianças aprenderem a contar de 1 a 20 tocando em emojis.
 4. Ao chegar em **20**: o app faz a **contagem completa de 1 a 20**, destacando cada figura enquanto fala o número, para ela acompanhar.
 5. Depois **começa de novo** com outro tema (frutas, bichinhos, carrinhos, natureza, animais, brinquedos).
 
+### Repetir junto (🎤)
+Na contagem completa, o app fala o número e **espera ela repetir** antes de ir para o próximo.
+- Com microfone, o app reconhece o número falado (aceita "quatorze"/"catorze", "duas", etc.).
+- Se ela tentar 3 vezes e o app não entender, ele segue em frente para não frustrar.
+- Se ninguém falar por 7 segundos, o app repete o número ("Fala comigo: cinco!").
+- O botão **👄 Falei!** avança na hora, para aparelhos sem microfone ou se o reconhecimento falhar.
+- O botão 🎤 no topo liga/desliga esse modo (desligado, a contagem é automática como antes).
+
+O microfone funciona no Chrome/Edge (computador e Android) e no Safari. No app do Claude para celular o microfone não é liberado; lá use o botão "Falei!".
+
 Extras: tocar numa figura já contada repete o número dela; 🔊 liga/desliga o som; 🔄 recomeça.
 A trilha de bolinhas embaixo mostra o progresso de 1 a 20.
 
